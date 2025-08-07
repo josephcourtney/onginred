@@ -13,6 +13,8 @@ from typing import TYPE_CHECKING, Any, Final
 from croniter import croniter
 from jkit.file_io import ensure_path
 
+_MISSING = object()
+
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
 
@@ -61,6 +63,14 @@ class KeepAliveBuilder:
     successful_exit: bool | None
 
     def build(self) -> bool | dict | None:
+        if all([
+            self.keep_alive is True,
+            not self.path_state,
+            not self.other_jobs,
+            self.crashed is None,
+            self.successful_exit is None,
+        ]):
+            return True
         if any([
             self.keep_alive,
             self.path_state,
@@ -244,6 +254,14 @@ class TimeTriggers:
             msg = f"Invalid cron expression: {expr}"
             raise ValueError(msg)
         minute_s, hour_s, day_s, month_s, weekday_s = expr.split()
+        # simplify when day, month, weekday are wildcards
+        if day_s == "*" and month_s == "*" and weekday_s == "*":
+            minutes = _parse_cron_field(minute_s, 0, 59)
+            hours = _parse_cron_field(hour_s, 0, 23)
+            for m in minutes:
+                for h in hours:
+                    self.add_calendar_entry(minute=m, hour=h)
+            return
         minutes = _parse_cron_field(minute_s, 0, 59)
         hours = _parse_cron_field(hour_s, 0, 23)
         days = _parse_cron_field(day_s, 1, 31)
@@ -349,7 +367,7 @@ class EventTriggers:
         self,
         name: str,
         *,
-        sock_type: SockType | None = None,
+        sock_type: SockType | None = _MISSING,
         passive: bool | None = None,
         node_name: str | None = None,
         service_name: str | int | None = None,
@@ -363,9 +381,14 @@ class EventTriggers:
         bonjour: bool | str | list[str] | None = None,
         multicast_group: str | None = None,
     ) -> None:
+        #
+        # enforce explicit sock_type if passed
+        if sock_type is not _MISSING and not isinstance(sock_type, SockType):
+            msg = f"Invalid SockType: {sock_type!r}"
+            raise ValueError(msg)
         builder = SocketConfigBuilder()
         builder.set(
-            sock_type=sock_type,
+            sock_type=sock_type if isinstance(sock_type, SockType) else None,
             passive=passive,
             node_name=node_name,
             service_name=service_name,
@@ -397,9 +420,30 @@ class EventTriggers:
 
     def to_plist_dict(self) -> dict[str, Any]:
         plist: dict[str, Any] = {}
+        # validate socket dictionary keys
         if self.launch_events:
             plist["LaunchEvents"] = self.launch_events
         if self.sockets:
+            allowed = {
+                "SockType",
+                "SockPassive",
+                "SockNodeName",
+                "SockServiceName",
+                "SockFamily",
+                "SockProtocol",
+                "SockPathName",
+                "SecureSocketWithKey",
+                "SockPathOwner",
+                "SockPathGroup",
+                "SockPathMode",
+                "Bonjour",
+                "MulticastGroup",
+            }
+            for cfg in self.sockets.values():
+                for key in cfg:
+                    if key not in allowed:
+                        msg = f"Invalid socket key: {key}"
+                        raise KeyError(msg)
             plist["Sockets"] = self.sockets
         if self.mach_services:
             plist["MachServices"] = self.mach_services
@@ -498,6 +542,14 @@ class LaunchdSchedule:
             raise ValueError(msg)
         self.behavior.throttle_interval = seconds
 
+    def to_plist_dict(self) -> dict[str, Any]:
+        out = {}
+        out.update(self.time.to_plist_dict())
+        out.update(self.fs.to_plist_dict())
+        out.update(self.events.to_plist_dict())
+        out.update(self.behavior.to_plist_dict())
+        return out
+
 
 class LaunchdService:
     def __init__(
@@ -514,6 +566,9 @@ class LaunchdService:
         *,
         create_dir: bool = False,
     ):
+        if not command:
+            msg = "Missing required program arguments"
+            raise TypeError(msg)
         self.bundle_identifier = bundle_identifier
         self.command = list(command)
         self.schedule = schedule
@@ -521,7 +576,7 @@ class LaunchdService:
 
         plist_filename = f"{bundle_identifier}.plist"
         self.plist_path = Path(plist_path) if plist_path else DEFAULT_INSTALL_LOCATION / plist_filename
-        ensure_path(self.plist_path)
+        ensure_path(self.plist_path, allow_existing=True)
 
         self._ensure_log_files(
             log_name=log_name,
@@ -549,8 +604,9 @@ class LaunchdService:
             self.stdout_log = DEFAULT_LOG_LOCATION / f"{log_name}.out"
             self.stderr_log = DEFAULT_LOG_LOCATION / f"{log_name}.err"
 
-        ensure_path(self.stdout_log)
-        ensure_path(self.stderr_log)
+        if self.create_dir:
+            ensure_path(self.stdout_log)
+            ensure_path(self.stderr_log)
 
     @staticmethod
     def _resolve_launchctl() -> Path | None:
@@ -565,13 +621,18 @@ class LaunchdService:
             except OSError as e:
                 msg = "`launchctl` binary cannot be found at /bin/launchctl or via PATH."
                 raise LaunchdServiceError(msg) from e
+        else:
+            msg = "`launchctl` binary cannot be found."
+            raise LaunchdServiceError(msg)
         return None
 
     def install(self) -> None:
         plist = self.to_plist_dict()
         with self.plist_path.open("wb") as f:
             plistlib.dump(plist, f)
-        subprocess.run([self.launchctl_path, "load", str(self.plist_path)], check=True)  # noqa: S603
+        res = subprocess.run([self.launchctl_path, "load", str(self.plist_path)], check=False)
+        if res.returncode != 0:
+            raise subprocess.CalledProcessError(res.returncode, res.args)
 
     def uninstall(self) -> None:
         subprocess.run([self.launchctl_path, "unload", str(self.plist_path)], check=True)  # noqa: S603
