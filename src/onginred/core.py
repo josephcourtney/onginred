@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import plistlib
 import shutil
-import subprocess
+import subprocess  # noqa: S404
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import time
 from enum import StrEnum
 from pathlib import Path
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, Any, Final
 
 from croniter import croniter
 from jkit.file_io import ensure_path
@@ -52,13 +52,54 @@ def validate_range(name: str, value: int, lo: int, hi: int) -> None:
 
 
 # === Helpers ===
+@dataclass
+class KeepAliveBuilder:
+    keep_alive: bool | dict | None
+    path_state: dict[str, bool]
+    other_jobs: dict[str, bool]
+    crashed: bool | None
+    successful_exit: bool | None
+
+    def build(self) -> bool | dict | None:
+        if any([
+            self.keep_alive,
+            self.path_state,
+            self.other_jobs,
+            self.crashed is not None,
+            self.successful_exit is not None,
+        ]):
+            base = self.keep_alive if isinstance(self.keep_alive, dict) else ({} if self.keep_alive else None)
+            if base is None and self.keep_alive is True:
+                return True
+            if base is not None:
+                if self.path_state:
+                    base["PathState"] = self.path_state
+                if self.other_jobs:
+                    base["OtherJobEnabled"] = self.other_jobs
+                if self.crashed is not None:
+                    base["Crashed"] = self.crashed
+                if self.successful_exit is not None:
+                    base["SuccessfulExit"] = self.successful_exit
+                return base
+        return None
+
+
+@dataclass
 class CalendarEntryBuilder:
     entries: list[dict[str, int]]
 
     def __init__(self) -> None:
         self.entries = []
 
-    def add(self, *, minute=None, hour=None, day=None, weekday=None, month=None) -> None:
+    def add(
+        self,
+        *,
+        minute: int | None = None,
+        hour: int | None = None,
+        day: int | None = None,
+        weekday: int | None = None,
+        month: int | None = None,
+    ) -> None:
         entry: dict[str, int] = {}
         if minute is not None:
             self._validate("Minute", minute, 0, 59)
@@ -112,19 +153,19 @@ class SocketConfigBuilder:
     def set(
         self,
         *,
-        sock_type=None,
-        passive=None,
-        node_name=None,
-        service_name=None,
-        family=None,
-        protocol=None,
-        path_name=None,
-        secure_socket_key=None,
-        path_owner=None,
-        path_group=None,
-        path_mode=None,
-        bonjour=None,
-        multicast_group=None,
+        sock_type: SockType | None = None,
+        passive: bool | None = None,
+        node_name: str | None = None,
+        service_name: str | int | None = None,
+        family: SockFamily | None = None,
+        protocol: SockProtocol | None = None,
+        path_name: str | None = None,
+        secure_socket_key: str | None = None,
+        path_owner: int | None = None,
+        path_group: int | None = None,
+        path_mode: int | None = None,
+        bonjour: bool | str | list[str] | None = None,
+        multicast_group: str | None = None,
     ) -> None:
         if sock_type:
             self.config["SockType"] = sock_type.value
@@ -157,76 +198,10 @@ class SocketConfigBuilder:
         return self.config
 
 
-class KeepAliveBuilder:
-    def __init__(
-        self,
-        keep_alive: bool | dict | None,
-        path_state: dict[str, bool],
-        other_jobs: dict[str, bool],
-        crashed: bool | None,
-        successful_exit: bool | None,
-    ) -> None:
-        self.keep_alive = keep_alive
-        self.path_state = path_state
-        self.other_jobs = other_jobs
-        self.crashed = crashed
-        self.successful_exit = successful_exit
-
-    def build(self) -> bool | dict | None:
-        if any([
-            self.keep_alive,
-            self.path_state,
-            self.other_jobs,
-            self.crashed is not None,
-            self.successful_exit is not None,
-        ]):
-            base = self.keep_alive if isinstance(self.keep_alive, dict) else ({} if self.keep_alive else None)
-            if base is None and self.keep_alive is True:
-                return True
-            if base is not None:
-                if self.path_state:
-                    base["PathState"] = self.path_state
-                if self.other_jobs:
-                    base["OtherJobEnabled"] = self.other_jobs
-                if self.crashed is not None:
-                    base["Crashed"] = self.crashed
-                if self.successful_exit is not None:
-                    base["SuccessfulExit"] = self.successful_exit
-                return base
-        return None
-
-
 @dataclass
-class LaunchdSchedule:
-    # === Time-based triggers ===
-    calendar_entries: set[frozenset] = field(default_factory=set)
+class TimeTriggers:
+    calendar_entries: list[dict[str, int]] = field(default_factory=list)
     start_interval: int | None = None
-
-    # === File system triggers ===
-    watch_paths: set[str] = field(default_factory=set)
-    queue_directories: set[str] = field(default_factory=set)
-    start_on_mount: bool = False
-
-    # === Event and socket triggers ===
-    launch_events: dict[str, dict[str, dict]] = field(default_factory=dict)
-    sockets: dict[str, dict] = field(default_factory=dict)
-
-    # === Launch modifiers ===
-    run_at_load: bool | None = None
-    keep_alive: bool | dict | None = None
-    enable_pressured_exit: bool | None = None
-    enable_transactions: bool | None = None
-    exit_timeout: int | None = None
-    throttle_interval: int | None = None
-    launch_only_once: bool | None = None
-
-    mach_services: dict[str, bool | dict] = field(default_factory=dict)
-    keepalive_path_state: dict[str, bool] = field(default_factory=dict)
-    keepalive_other_jobs: dict[str, bool] = field(default_factory=dict)
-    restart_on_crash: bool | None = None
-    restart_on_success: bool | None = None
-
-    # === Public API ===
 
     def add_calendar_entry(
         self,
@@ -237,7 +212,7 @@ class LaunchdSchedule:
         weekday: int | None = None,
         month: int | None = None,
     ) -> None:
-        entry = {}
+        entry: dict[str, int] = {}
         if minute is not None:
             validate_range("Minute", minute, 0, 59)
             entry["Minute"] = minute
@@ -253,30 +228,7 @@ class LaunchdSchedule:
         if month is not None:
             validate_range("Month", month, 1, 12)
             entry["Month"] = month
-        self.calendar_entries.add(frozenset(entry.items()))
-
-    def add_cron(self, expr: str) -> None:
-        if not croniter.is_valid(expr):
-            msg = f"Invalid cron expression: {expr}"
-            raise ValueError(msg)
-        minute_s, hour_s, day_s, month_s, weekday_s = expr.split()
-
-        minutes = _parse_cron_field(minute_s, 0, 59)
-        hours = _parse_cron_field(hour_s, 0, 23)
-        days = _parse_cron_field(day_s, 1, 31)
-        months = _parse_cron_field(month_s, 1, 12)
-        weekdays = _parse_cron_field(weekday_s, 0, 7)
-
-        use_weekday = bool(weekday_s != "*")
-        for m in minutes:
-            for h in hours:
-                for mo in months:
-                    if days and not use_weekday:
-                        for d in days:
-                            self.add_calendar_entry(minute=m, hour=h, day=d, month=mo)
-                    if use_weekday:
-                        for wd in weekdays:
-                            self.add_calendar_entry(minute=m, hour=h, weekday=wd, month=mo)
+        self.calendar_entries.append(entry)
 
     def add_fixed_time(self, hour: int, minute: int) -> None:
         validate_range("Hour", hour, 0, 23)
@@ -286,6 +238,27 @@ class LaunchdSchedule:
     def add_fixed_times(self, pairs: Iterable[tuple[int, int]]) -> None:
         for h, m in pairs:
             self.add_fixed_time(h, m)
+
+    def add_cron(self, expr: str) -> None:
+        if not croniter.is_valid(expr):
+            msg = f"Invalid cron expression: {expr}"
+            raise ValueError(msg)
+        minute_s, hour_s, day_s, month_s, weekday_s = expr.split()
+        minutes = _parse_cron_field(minute_s, 0, 59)
+        hours = _parse_cron_field(hour_s, 0, 23)
+        days = _parse_cron_field(day_s, 1, 31)
+        months = _parse_cron_field(month_s, 1, 12)
+        weekdays = _parse_cron_field(weekday_s, 0, 7)
+        use_weekday = weekday_s != "*"
+        for m in minutes:
+            for h in hours:
+                for mo in months:
+                    if not use_weekday:
+                        for d in days:
+                            self.add_calendar_entry(minute=m, hour=h, day=d, month=mo)
+                    else:
+                        for wd in weekdays:
+                            self.add_calendar_entry(minute=m, hour=h, weekday=wd, month=mo)
 
     def add_suppression_window(self, spec: str) -> None:
         try:
@@ -305,6 +278,44 @@ class LaunchdSchedule:
             raise ValueError(msg)
         self.start_interval = seconds
 
+    def to_plist_dict(self) -> dict[str, Any]:
+        plist: dict[str, Any] = {}
+        if self.calendar_entries:
+            plist["StartCalendarInterval"] = self.calendar_entries
+        if self.start_interval is not None:
+            plist["StartInterval"] = self.start_interval
+        return plist
+
+    @staticmethod
+    def _parse_time(s: str) -> time:
+        hour, minute = map(int, s.split(":"))
+        validate_range("Hour", hour, 0, 23)
+        validate_range("Minute", minute, 0, 59)
+        return time(hour, minute)
+
+    @staticmethod
+    def _expand_range(start: time, end: time) -> list[int]:
+        def to_min(t: time) -> int:
+            return t.hour * 60 + t.minute
+
+        start_min = to_min(start)
+        end_min = to_min(end)
+
+        minutes: Final = list(range(1440))
+        if end_min >= start_min:
+            window = minutes[start_min : end_min + 1]
+        else:
+            window = minutes[start_min:] + minutes[: end_min + 1]
+
+        return sorted({m % 60 for m in window})
+
+
+@dataclass
+class FilesystemTriggers:
+    watch_paths: set[str] = field(default_factory=set)
+    queue_directories: set[str] = field(default_factory=set)
+    start_on_mount: bool = False
+
     def add_watch_path(self, path: str) -> None:
         self.watch_paths.add(path)
 
@@ -314,10 +325,25 @@ class LaunchdSchedule:
     def enable_start_on_mount(self) -> None:
         self.start_on_mount = True
 
+    def to_plist_dict(self) -> dict[str, Any]:
+        plist: dict[str, Any] = {}
+        if self.watch_paths:
+            plist["WatchPaths"] = sorted(self.watch_paths)
+        if self.queue_directories:
+            plist["QueueDirectories"] = sorted(self.queue_directories)
+        if self.start_on_mount:
+            plist["StartOnMount"] = True
+        return plist
+
+
+@dataclass
+class EventTriggers:
+    launch_events: dict[str, dict[str, dict]] = field(default_factory=dict)
+    sockets: dict[str, dict] = field(default_factory=dict)
+    mach_services: dict[str, bool | dict] = field(default_factory=dict)
+
     def add_launch_event(self, subsystem: str, event_name: str, descriptor: dict) -> None:
-        if subsystem not in self.launch_events:
-            self.launch_events[subsystem] = {}
-        self.launch_events[subsystem][event_name] = descriptor
+        self.launch_events.setdefault(subsystem, {})[event_name] = descriptor
 
     def add_socket(
         self,
@@ -355,118 +381,47 @@ class LaunchdSchedule:
         )
         self.sockets[name] = builder.as_dict()
 
-    # === Launch behavior configuration ===
-
-    def set_run_at_load(self, value: bool) -> None:
-        self.run_at_load = value
-
-    def set_keep_alive(self, value: bool | dict) -> None:
-        self.keep_alive = value
-
-    def set_enable_pressured_exit(self, value: bool) -> None:
-        self.enable_pressured_exit = value
-
-    def set_enable_transactions(self, value: bool) -> None:
-        self.enable_transactions = value
-
-    def set_exit_timeout(self, seconds: int) -> None:
-        if seconds < 0:
-            msg = "ExitTimeOut must be ≥ 0"
-            raise ValueError(msg)
-        self.exit_timeout = seconds
-
-    def set_throttle_interval(self, seconds: int) -> None:
-        if seconds < 0:
-            msg = "ThrottleInterval must be ≥ 0"
-            raise ValueError(msg)
-        self.throttle_interval = seconds
-
-    def set_launch_only_once(self, value: bool) -> None:
-        self.launch_only_once = value
-
-    # === Internal utilities ===
-
-    @staticmethod
-    def _parse_time(s: str) -> time:
-        hour, minute = map(int, s.split(":"))
-        validate_range("Hour", hour, 0, 23)
-        validate_range("Minute", minute, 0, 59)
-        return time(hour, minute)
-
-    @staticmethod
-    def _expand_range(start: time, end: time) -> list[int]:
-        def to_min(t: time) -> int:
-            return t.hour * 60 + t.minute
-
-        start_min = to_min(start)
-        end_min = to_min(end)
-
-        minutes: Final = list(range(1440))
-        if end_min >= start_min:
-            window = minutes[start_min : end_min + 1]
-        else:
-            window = minutes[start_min:] + minutes[: end_min + 1]
-
-        return sorted({m % 60 for m in window})
-
-    @staticmethod
-    def _extract_minutes(expr: str) -> list[int]:
-        m0 = expr.split(maxsplit=1)[0]
-        if m0.startswith("*/"):
-            step = int(m0[2:])
-            return list(range(0, 60, step))
-        if "," in m0:
-            return [int(m) for m in m0.split(",")]
-        if m0 == "*":
-            return list(range(60))
-        return [int(m0)]
-
     def add_mach_service(
-        self, name: str, *, reset_at_close: bool = False, hide_until_checkin: bool = False
+        self,
+        name: str,
+        *,
+        reset_at_close: bool = False,
+        hide_until_checkin: bool = False,
     ) -> None:
-        config = {}
+        config: dict | bool = {}
         if reset_at_close:
             config["ResetAtClose"] = True
         if hide_until_checkin:
             config["HideUntilCheckIn"] = True
         self.mach_services[name] = config or True
 
-    def set_keepalive_path_state(self, path: str, exists: bool = True) -> None:
-        self.keepalive_path_state[path] = exists
-
-    def set_keepalive_other_job(self, label: str, loaded: bool = True) -> None:
-        self.keepalive_other_jobs[label] = loaded
-
-    def set_restart_on_crash(self, value: bool) -> None:
-        self.restart_on_crash = value
-
-    def set_restart_on_success(self, value: bool) -> None:
-        self.restart_on_success = value
-
-    def to_plist_dict(self) -> dict:
-        plist: dict = {}
-        # Time triggers
-        entries = self.calendar.as_list()
-        if entries:
-            plist["StartCalendarInterval"] = entries
-        if self.start_interval is not None:
-            plist["StartInterval"] = self.start_interval
-        # File-system triggers
-        if self.watch_paths:
-            plist["WatchPaths"] = sorted(self.watch_paths)
-        if self.queue_directories:
-            plist["QueueDirectories"] = sorted(self.queue_directories)
-        if self.start_on_mount:
-            plist["StartOnMount"] = True
-        # Events + Sockets
+    def to_plist_dict(self) -> dict[str, Any]:
+        plist: dict[str, Any] = {}
         if self.launch_events:
             plist["LaunchEvents"] = self.launch_events
         if self.sockets:
             plist["Sockets"] = self.sockets
-        # Mach services
         if self.mach_services:
             plist["MachServices"] = self.mach_services
-        # Launch behavior flags
+        return plist
+
+
+@dataclass
+class LaunchBehavior:
+    run_at_load: bool | None = None
+    enable_pressured_exit: bool | None = None
+    enable_transactions: bool | None = None
+    _exit_timeout: int | None = field(default=None, repr=False)
+    _throttle_interval: int | None = field(default=None, repr=False)
+    launch_only_once: bool | None = None
+    keep_alive: bool | dict | None = None
+    path_state: dict[str, bool] = field(default_factory=dict)
+    other_jobs: dict[str, bool] = field(default_factory=dict)
+    crashed: bool | None = None
+    successful_exit: bool | None = None
+
+    def to_plist_dict(self) -> dict[str, Any]:
+        plist: dict[str, Any] = {}
         if self.run_at_load is not None:
             plist["RunAtLoad"] = self.run_at_load
         if self.enable_pressured_exit is not None:
@@ -474,23 +429,74 @@ class LaunchdSchedule:
         if self.enable_transactions is not None:
             plist["EnableTransactions"] = self.enable_transactions
         if self.exit_timeout is not None:
-            plist["ExitTimeOut"] = self.exit_timeout
+            plist["ExitTimeout"] = self.exit_timeout
         if self.throttle_interval is not None:
             plist["ThrottleInterval"] = self.throttle_interval
         if self.launch_only_once is not None:
             plist["LaunchOnlyOnce"] = self.launch_only_once
-        # Keep‑alive logic via builder
+
         kab = KeepAliveBuilder(
-            self.keep_alive,
-            self.keepalive_path_state,
-            self.keepalive_other_jobs,
-            self.restart_on_crash,
-            self.restart_on_success,
+            keep_alive=self.keep_alive,
+            path_state=self.path_state,
+            other_jobs=self.other_jobs,
+            crashed=self.crashed,
+            successful_exit=self.successful_exit,
         )
         ka = kab.build()
         if ka is not None:
             plist["KeepAlive"] = ka
         return plist
+
+    @property
+    def exit_timeout(self) -> int | None:
+        return self._exit_timeout
+
+    @exit_timeout.setter
+    def exit_timeout(self, value: int | None) -> None:
+        if value is not None and value < 0:
+            msg = "ExitTimeout must be ≥ 0"
+            raise ValueError(msg)
+        self._exit_timeout = value
+
+    @property
+    def throttle_interval(self) -> int | None:
+        return self._throttle_interval
+
+    @throttle_interval.setter
+    def throttle_interval(self, value: int | None) -> None:
+        if value is not None and value < 0:
+            msg = "ThrottleInterval must be ≥ 0"
+            raise ValueError(msg)
+        self._throttle_interval = value
+
+
+@dataclass
+class LaunchdSchedule:
+    time: TimeTriggers = field(default_factory=TimeTriggers)
+    fs: FilesystemTriggers = field(default_factory=FilesystemTriggers)
+    events: EventTriggers = field(default_factory=EventTriggers)
+    behavior: LaunchBehavior = field(default_factory=LaunchBehavior)
+
+    def add_cron(self, expr: str) -> None:
+        self.time.add_cron(expr)
+
+    def add_watch_path(self, path: str) -> None:
+        self.fs.add_watch_path(path)
+
+    def add_socket(self, name: str, config: dict) -> None:
+        self.events.add_socket(name, config)
+
+    def set_exit_timeout(self, seconds: int) -> None:
+        if seconds < 0:
+            msg = "ExitTimeout must be ≥ 0"
+            raise ValueError(msg)
+        self.behavior.exit_timeout = seconds
+
+    def set_throttle_interval(self, seconds: int) -> None:
+        if seconds < 0:
+            msg = "ThrottleInterval must be ≥ 0"
+            raise ValueError(msg)
+        self.behavior.throttle_interval = seconds
 
 
 class LaunchdService:
@@ -546,7 +552,8 @@ class LaunchdService:
         ensure_path(self.stdout_log)
         ensure_path(self.stderr_log)
 
-    def _resolve_launchctl(self) -> Path | None:
+    @staticmethod
+    def _resolve_launchctl() -> Path | None:
         default = Path("/bin/launchctl")
         if default.exists():
             return default
@@ -561,25 +568,20 @@ class LaunchdService:
         return None
 
     def install(self) -> None:
-        plist = self._generate_plist()
+        plist = self.to_plist_dict()
         with self.plist_path.open("wb") as f:
             plistlib.dump(plist, f)
-        subprocess.run(["/bin/launchctl", "load", str(self.plist_path)], check=True)
+        subprocess.run([self.launchctl_path, "load", str(self.plist_path)], check=True)  # noqa: S603
 
     def uninstall(self) -> None:
-        subprocess.run(["/bin/launchctl", "unload", str(self.plist_path)], check=True)
+        subprocess.run([self.launchctl_path, "unload", str(self.plist_path)], check=True)  # noqa: S603
         self.plist_path.unlink(missing_ok=True)
 
-    def _generate_plist(self) -> dict:
-        # Start with the base configuration from the schedule
-        plist = self.schedule.to_plist_dict()
-
-        # Inject required metadata for launchd
-        plist.update({
+    def to_plist_dict(self) -> dict:
+        return {
             "Label": self.bundle_identifier,
             "ProgramArguments": self.command,
             "StandardOutPath": str(self.stdout_log),
             "StandardErrorPath": str(self.stderr_log),
-        })
-
-        return plist
+            **self.schedule.to_plist_dict(),
+        }

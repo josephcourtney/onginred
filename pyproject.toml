@@ -18,10 +18,11 @@
   requires-python = ">=3.13"
   dependencies = [
     "croniter>=6.0.0",
-  ]
+    "jkit>=0.0.12",
+]
 
-  [project.scripts]
-    onginred = "onginred.cli:main"
+  # [project.scripts]
+  #   onginred = "onginred.cli:main" # may be added later
 
 [dependency-groups]
   dev = [
@@ -39,6 +40,8 @@
   requires      = ["uv_build>=0.6,<0.7"]
   build-backend = "uv_build"
 
+[tool.uv.sources]
+  jkit = { git = "ssh://git@github.com-josephcourtney/josephcourtney/jkit.git" }
 
 # ==================================== lint ====================================
 [tool.ruff]
@@ -50,19 +53,6 @@
       # "TD003",  # Missing issue link for this TODO
       # "FIX002", # Line contains TODO, consider resolving the issue
     ]
-
-# =================================== typecheck ===================================
-[tool.basedpyright]
-  typeCheckingMode = "recommended"
-  pythonVersion = "3.13"
-  pythonPlatform = "Darwin"
-  reportImplicitOverride = false
-  reportMissingTypeStubs = false
-  reportUnusedParameter = false
-  executionEnvironments = [
-    { root = "tests", reportPrivateUsage = false, reportUnusedCallResult = false, extraPaths = [] },
-  ]
-
 
 # =================================== test ===================================
 [tool.pytest.ini_options]
