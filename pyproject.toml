@@ -1,0 +1,134 @@
+# =================================== project ====================================
+[project]
+  name = "onginred"
+  version = "0.0.1"
+  description = "manager for macos launchd services"
+  readme = "README.md"
+  authors = [
+    { name = "Joseph M Courtney", email = "Joseph.M.Courtney@gmail.com" },
+  ]
+  urls = { "Homepage" = "https://github.com/josephcourtney/onginred", "Bug Tracker" = "https://github.com/josephcourtney/onginred/issues" }
+  license = { text = "GPL-3.0-only" }
+  classifiers = [
+    "Development Status :: 3 - Alpha",
+    "License :: OSI Approved :: GNU General Public License (GPL)",
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+  ]
+  requires-python = ">=3.13"
+  dependencies = [
+    "croniter>=6.0.0",
+  ]
+
+  [project.scripts]
+    onginred = "onginred.cli:main"
+
+[dependency-groups]
+  dev = [
+    "ruff>=0.11.0",
+    "ty>=0.0.1a16",
+    "pytest>=8.3.5",
+    "coverage>=7.7.0",
+    "pytest-cov>=6.0.0",
+    "pytest-randomly>=3.16.0",
+    "freezegun>=1.5.1",
+  ]
+
+# =================================== build ====================================
+[build-system]
+  requires      = ["uv_build>=0.6,<0.7"]
+  build-backend = "uv_build"
+
+
+# ==================================== lint ====================================
+[tool.ruff]
+  extend = "./ruff.default.toml"
+
+  [tool.ruff.lint]
+    ignore = [
+      # "TD002",  # Missing author in TODO; try: `# TODO(<author_name>): ...` or `# TODO @<author_name>: ...`
+      # "TD003",  # Missing issue link for this TODO
+      # "FIX002", # Line contains TODO, consider resolving the issue
+    ]
+
+# =================================== typecheck ===================================
+[tool.basedpyright]
+  typeCheckingMode = "recommended"
+  pythonVersion = "3.13"
+  pythonPlatform = "Darwin"
+  reportImplicitOverride = false
+  reportMissingTypeStubs = false
+  reportUnusedParameter = false
+  executionEnvironments = [
+    { root = "tests", reportPrivateUsage = false, reportUnusedCallResult = false, extraPaths = [] },
+  ]
+
+
+# =================================== test ===================================
+[tool.pytest.ini_options]
+  addopts = [
+    "--cov=onginred",
+    "--cov-report=xml",
+    "--cov-report=term-missing",
+  ]
+  testpaths = ["tests"]
+
+# =================================== test:coverage ===================================
+[tool.coverage.run]
+  source   = ["src/onginred"]
+  branch   = true
+  parallel = true
+
+[tool.coverage.report]
+  show_missing = true
+  skip_covered = true
+  # Regexes for lines to exclude from consideration
+  exclude_also = [
+    # Don't complain about missing debug-only code:
+    "def __repr__",
+    "if self\\.debug",
+
+    # Don't complain if tests don't hit defensive assertion code:
+    "raise AssertionError",
+    "raise NotImplementedError",
+
+    # Don't complain if non-runnable code isn't run:
+    "if 0:",
+    "if __name__ == .__main__.:",
+
+    # Don't complain about abstract methods, they aren't run:
+    "@(abc\\.)?abstractmethod",
+  ]
+  ignore_errors = true
+
+[tool.coverage.xml]
+  output = ".coverage.xml"
+
+[tool.commitizen]
+  name                     = "cz_conventional_commits"
+  tag_format               = "v{version}"
+  update_changelog_on_bump = true
+  bump_message             = "chore: bump version to {new_version}"
+  major_version_zero       = true
+  version_provider         = "uv"
+
+  # Define the allowed commit types and their descriptions:
+  [tool.commitizen.types]
+    feat     = "A new feature"
+    fix      = "A bug fix"
+    docs     = "Documentation only changes"
+    style    = "Code style (formatting, missing semi-colons, etc.)"
+    refactor = "Refactoring code without feature changes"
+    perf     = "Performance improvements"
+    test     = "Adding missing tests or correcting existing ones"
+    ci       = "CI configuration changes"
+    chore    = "Other changes that don't modify src or tests"
+
+  # Define your scopes so people choose from a fixed list:
+  [tool.commitizen.scopes]
+    router     = "Changes to routing logic"
+    dispatcher = "Changes to dispatcher/handler plumbing"
+    cache      = "Caching layer updates"
+    api        = "API‐layer changes"
+    docs       = "Documentation"
+    tests      = "Test suite changes"
