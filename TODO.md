@@ -1,17 +1,17 @@
-- [ ] **Remove Redundant Code**
+- [x] **Remove Redundant Code**
   - Review for and eliminate any remaining defensive logic that duplicates `pydantic` validation.
-- [ ] **Verify Default `.to_plist_dict()` Equivalence**
+- [x] **Verify Default `.to_plist_dict()` Equivalence**
   - Add regression tests comparing default-constructed model output to prior builder output (see PLAN.md under “Model consistency”).
-- [ ] **Measure Code Complexity**
+- [x] **Measure Code Complexity**
   - Run tools like `radon` or `wily` to compare maintainability index pre- and post-refactor.
-- [ ] **Document Changes**
+- [x] **Document Changes**
   - Update `README.md` and `man_launchd_plist.md`:
     - Reflect pydantic-based usage.
     - Remove mentions of dataclasses or manual dict assembly.
-- [ ] **Remove Any Legacy Comments**
+- [x] **Remove Any Legacy Comments**
   - Ensure inline comments or docstrings don’t reference removed builder classes or obsolete patterns.
-- [ ] Test precedence of `Program` over `ProgramArguments` in edge cases (e.g., empty list, relative path).
-- [ ] Validate edge behavior for:
+- [x] Test precedence of `Program` over `ProgramArguments` in edge cases (e.g., empty list, relative path).
+- [x] Validate edge behavior for:
   - Missing schedule/event/behavior (empty `LaunchdSchedule`).
   - `validate_range()` and `_parse_cron_field()` with boundary and invalid inputs.
   - Socket config conflict combinations (e.g., multiple mutually exclusive fields).

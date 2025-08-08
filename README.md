@@ -9,7 +9,7 @@
 
 ## Core capabilities:
 
-* **Define launch configurations** using Python data structures instead of writing raw XML property lists.
+* **Define launch configurations** using [Pydantic](https://docs.pydantic.dev/) models and Python data structures instead of writing raw XML property lists.
 * **Support for time-based scheduling**, file system triggers, sockets, Mach services, and more via composable classes:
 
   * `TimeTriggers`, `FilesystemTriggers`, `EventTriggers`, and `LaunchBehavior`.
