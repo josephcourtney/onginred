@@ -4,17 +4,15 @@ import plistlib
 import shutil
 import subprocess  # noqa: S404
 from collections.abc import Iterable
-from dataclasses import dataclass, field
 from datetime import time
 from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 
 from croniter import croniter
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from onginred.file_io import ensure_path
-
-_MISSING = object()
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
@@ -55,13 +53,12 @@ def validate_range(name: str, value: int, lo: int, hi: int) -> None:
 
 
 # === Helpers ===
-@dataclass
-class KeepAliveBuilder:
-    keep_alive: bool | dict | None
-    path_state: dict[str, bool]
-    other_jobs: dict[str, bool]
-    crashed: bool | None
-    successful_exit: bool | None
+class KeepAliveConfig(BaseModel):
+    keep_alive: bool | dict | None = None
+    path_state: dict[str, bool] = Field(default_factory=dict)
+    other_jobs: dict[str, bool] = Field(default_factory=dict)
+    crashed: bool | None = None
+    successful_exit: bool | None = None
 
     def build(self) -> bool | dict | None:
         if all([
@@ -95,50 +92,6 @@ class KeepAliveBuilder:
         return None
 
 
-@dataclass
-class CalendarEntryBuilder:
-    entries: list[dict[str, int]]
-
-    def __init__(self) -> None:
-        self.entries = []
-
-    def add(
-        self,
-        *,
-        minute: int | None = None,
-        hour: int | None = None,
-        day: int | None = None,
-        weekday: int | None = None,
-        month: int | None = None,
-    ) -> None:
-        entry: dict[str, int] = {}
-        if minute is not None:
-            self._validate("Minute", minute, 0, 59)
-            entry["Minute"] = minute
-        if hour is not None:
-            self._validate("Hour", hour, 0, 23)
-            entry["Hour"] = hour
-        if day is not None:
-            self._validate("Day", day, 1, 31)
-            entry["Day"] = day
-        if weekday is not None:
-            self._validate("Weekday", weekday, 0, 7)
-            entry["Weekday"] = weekday
-        if month is not None:
-            self._validate("Month", month, 1, 12)
-            entry["Month"] = month
-        self.entries.append(entry)
-
-    @staticmethod
-    def _validate(name: str, value: int, lo: int, hi: int) -> None:
-        if not (lo <= value <= hi):
-            msg = f"{name} must be in [{lo}, {hi}]"
-            raise ValueError(msg)
-
-    def as_list(self) -> list[dict[str, int]]:
-        return self.entries
-
-
 def _parse_cron_field(field: str, lo: int, hi: int) -> list[int]:
     if field == "*":
         return list(range(lo, hi + 1))
@@ -157,62 +110,45 @@ def _parse_cron_field(field: str, lo: int, hi: int) -> list[int]:
     return sorted(values)
 
 
-class SocketConfigBuilder:
-    def __init__(self) -> None:
-        self.config: dict = {}
+class SocketConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
-    def set(
-        self,
-        *,
-        sock_type: SockType | None = None,
-        passive: bool | None = None,
-        node_name: str | None = None,
-        service_name: str | int | None = None,
-        family: SockFamily | None = None,
-        protocol: SockProtocol | None = None,
-        path_name: str | None = None,
-        secure_socket_key: str | None = None,
-        path_owner: int | None = None,
-        path_group: int | None = None,
-        path_mode: int | None = None,
-        bonjour: bool | str | list[str] | None = None,
-        multicast_group: str | None = None,
-    ) -> None:
-        if sock_type:
-            self.config["SockType"] = sock_type.value
-        if passive is not None:
-            self.config["SockPassive"] = passive
-        if node_name:
-            self.config["SockNodeName"] = node_name
-        if service_name:
-            self.config["SockServiceName"] = service_name
-        if family:
-            self.config["SockFamily"] = family.value
-        if protocol:
-            self.config["SockProtocol"] = protocol.value
-        if path_name:
-            self.config["SockPathName"] = path_name
-        if secure_socket_key:
-            self.config["SecureSocketWithKey"] = secure_socket_key
-        if path_owner is not None:
-            self.config["SockPathOwner"] = path_owner
-        if path_group is not None:
-            self.config["SockPathGroup"] = path_group
-        if path_mode is not None:
-            self.config["SockPathMode"] = path_mode
-        if bonjour is not None:
-            self.config["Bonjour"] = bonjour
-        if multicast_group:
-            self.config["MulticastGroup"] = multicast_group
+    sock_type: SockType | None = Field(default=None, alias="SockType")
+    passive: bool | None = Field(default=None, alias="SockPassive")
+    node_name: str | None = Field(default=None, alias="SockNodeName")
+    service_name: str | int | None = Field(default=None, alias="SockServiceName")
+    family: SockFamily | None = Field(default=None, alias="SockFamily")
+    protocol: SockProtocol | None = Field(default=None, alias="SockProtocol")
+    path_name: str | None = Field(default=None, alias="SockPathName")
+    secure_socket_key: str | None = Field(default=None, alias="SecureSocketWithKey")
+    path_owner: int | None = Field(default=None, alias="SockPathOwner")
+    path_group: int | None = Field(default=None, alias="SockPathGroup")
+    path_mode: int | None = Field(default=None, alias="SockPathMode")
+    bonjour: bool | str | list[str] | None = Field(default=None, alias="Bonjour")
+    multicast_group: str | None = Field(default=None, alias="MulticastGroup")
+
+    @field_validator("path_mode")
+    @classmethod
+    def _valid_mode(cls, v: int | None) -> int | None:
+        if v is not None:
+            validate_range("SockPathMode", v, 0, 0o777)
+        return v
+
+    @model_validator(mode="after")
+    def _check_conflicts(self) -> SocketConfig:
+        if self.path_name and (self.node_name or self.service_name):
+            msg = "SockPathName cannot be combined with SockNodeName or SockServiceName"
+            raise ValueError(msg)
+        return self
 
     def as_dict(self) -> dict:
-        return self.config
+        return self.model_dump(by_alias=True, exclude_none=True)
 
 
-@dataclass
-class TimeTriggers:
-    calendar_entries: list[dict[str, int]] = field(default_factory=list)
-    start_interval: int | None = None
+class TimeTriggers(BaseModel):
+    model_config = ConfigDict(validate_assignment=True, populate_by_name=True)
+    calendar_entries: list[dict[str, int]] = Field(default_factory=list, alias="StartCalendarInterval")
+    start_interval: int | None = Field(None, alias="StartInterval")
 
     def add_calendar_entry(
         self,
@@ -250,7 +186,7 @@ class TimeTriggers:
         for h, m in pairs:
             self.add_fixed_time(h, m)
 
-    def add_cron(self, expr: str) -> None:
+    def add_cron(self, expr: str) -> None:  # noqa: C901
         if not croniter.is_valid(expr):
             msg = f"Invalid cron expression: {expr}"
             raise ValueError(msg)
@@ -298,12 +234,10 @@ class TimeTriggers:
         self.start_interval = seconds
 
     def to_plist_dict(self) -> dict[str, Any]:
-        plist: dict[str, Any] = {}
-        if self.calendar_entries:
-            plist["StartCalendarInterval"] = self.calendar_entries
-        if self.start_interval is not None:
-            plist["StartInterval"] = self.start_interval
-        return plist
+        data = self.model_dump(by_alias=True, exclude_none=True)
+        if not data.get("StartCalendarInterval"):
+            data.pop("StartCalendarInterval", None)
+        return data
 
     @staticmethod
     def _parse_time(s: str) -> time:
@@ -329,11 +263,11 @@ class TimeTriggers:
         return sorted({m % 60 for m in window})
 
 
-@dataclass
-class FilesystemTriggers:
-    watch_paths: set[str] = field(default_factory=set)
-    queue_directories: set[str] = field(default_factory=set)
-    start_on_mount: bool = False
+class FilesystemTriggers(BaseModel):
+    model_config = ConfigDict(validate_assignment=True, populate_by_name=True)
+    watch_paths: set[str] = Field(default_factory=set, alias="WatchPaths")
+    queue_directories: set[str] = Field(default_factory=set, alias="QueueDirectories")
+    start_on_mount: bool = Field(default=False, alias="StartOnMount")
 
     def add_watch_path(self, path: str) -> None:
         self.watch_paths.add(path)
@@ -345,30 +279,31 @@ class FilesystemTriggers:
         self.start_on_mount = True
 
     def to_plist_dict(self) -> dict[str, Any]:
-        plist: dict[str, Any] = {}
-        if self.watch_paths:
-            plist["WatchPaths"] = sorted(self.watch_paths)
-        if self.queue_directories:
-            plist["QueueDirectories"] = sorted(self.queue_directories)
-        if self.start_on_mount:
-            plist["StartOnMount"] = True
+        plist = self.model_dump(by_alias=True, exclude_defaults=True, exclude_none=True)
+        if "WatchPaths" in plist:
+            plist["WatchPaths"] = sorted(plist["WatchPaths"])
+        if "QueueDirectories" in plist:
+            plist["QueueDirectories"] = sorted(plist["QueueDirectories"])
         return plist
 
 
-@dataclass
-class EventTriggers:
-    launch_events: dict[str, dict[str, dict]] = field(default_factory=dict)
-    sockets: dict[str, dict] = field(default_factory=dict)
-    mach_services: dict[str, bool | dict] = field(default_factory=dict)
+class EventTriggers(BaseModel):
+    model_config = ConfigDict(validate_assignment=True, populate_by_name=True)
+    launch_events: dict[str, dict[str, dict]] = Field(default_factory=dict, alias="LaunchEvents")
+    sockets: dict[str, dict] = Field(default_factory=dict, alias="Sockets")
+    mach_services: dict[str, bool | dict] = Field(default_factory=dict, alias="MachServices")
 
     def add_launch_event(self, subsystem: str, event_name: str, descriptor: dict) -> None:
+        if not isinstance(descriptor, dict):
+            msg = "descriptor must be a dict"
+            raise TypeError(msg)
         self.launch_events.setdefault(subsystem, {})[event_name] = descriptor
 
     def add_socket(
         self,
         name: str,
         *,
-        sock_type: SockType | None = _MISSING,
+        sock_type: SockType | None = None,
         passive: bool | None = None,
         node_name: str | None = None,
         service_name: str | int | None = None,
@@ -382,14 +317,11 @@ class EventTriggers:
         bonjour: bool | str | list[str] | None = None,
         multicast_group: str | None = None,
     ) -> None:
-        #
-        # enforce explicit sock_type if passed
-        if sock_type is not _MISSING and not isinstance(sock_type, SockType):
+        if sock_type is not None and not isinstance(sock_type, SockType):
             msg = f"Invalid SockType: {sock_type!r}"
             raise ValueError(msg)
-        builder = SocketConfigBuilder()
-        builder.set(
-            sock_type=sock_type if isinstance(sock_type, SockType) else None,
+        cfg = SocketConfig(
+            sock_type=sock_type,
             passive=passive,
             node_name=node_name,
             service_name=service_name,
@@ -403,7 +335,7 @@ class EventTriggers:
             bonjour=bonjour,
             multicast_group=multicast_group,
         )
-        self.sockets[name] = builder.as_dict()
+        self.sockets[name] = cfg.as_dict()
 
     def add_mach_service(
         self,
@@ -421,7 +353,6 @@ class EventTriggers:
 
     def to_plist_dict(self) -> dict[str, Any]:
         plist: dict[str, Any] = {}
-        # validate socket dictionary keys
         if self.launch_events:
             plist["LaunchEvents"] = self.launch_events
         if self.sockets:
@@ -440,47 +371,44 @@ class EventTriggers:
                 "Bonjour",
                 "MulticastGroup",
             }
-            for cfg in self.sockets.values():
-                for key in cfg:
-                    if key not in allowed:
-                        msg = f"Invalid socket key: {key}"
-                        raise KeyError(msg)
+            for config in self.sockets.values():
+                invalid = set(config) - allowed
+                if invalid:
+                    msg = f"Invalid socket keys: {invalid}"
+                    raise KeyError(msg)
             plist["Sockets"] = self.sockets
         if self.mach_services:
             plist["MachServices"] = self.mach_services
         return plist
 
 
-@dataclass
-class LaunchBehavior:
-    run_at_load: bool | None = None
-    enable_pressured_exit: bool | None = None
-    enable_transactions: bool | None = None
-    _exit_timeout: int | None = field(default=None, repr=False)
-    _throttle_interval: int | None = field(default=None, repr=False)
-    launch_only_once: bool | None = None
+class LaunchBehavior(BaseModel):
+    model_config = ConfigDict(validate_assignment=True, populate_by_name=True)
+    run_at_load: bool | None = Field(None, alias="RunAtLoad")
+    enable_pressured_exit: bool | None = Field(None, alias="EnablePressuredExit")
+    enable_transactions: bool | None = Field(None, alias="EnableTransactions")
+    launch_only_once: bool | None = Field(None, alias="LaunchOnlyOnce")
+    exit_timeout: int | None = Field(None, alias="ExitTimeout", ge=0)
+    throttle_interval: int | None = Field(None, alias="ThrottleInterval", ge=0)
     keep_alive: bool | dict | None = None
-    path_state: dict[str, bool] = field(default_factory=dict)
-    other_jobs: dict[str, bool] = field(default_factory=dict)
+    path_state: dict[str, bool] = Field(default_factory=dict)
+    other_jobs: dict[str, bool] = Field(default_factory=dict)
     crashed: bool | None = None
     successful_exit: bool | None = None
 
     def to_plist_dict(self) -> dict[str, Any]:
-        plist: dict[str, Any] = {}
-        if self.run_at_load is not None:
-            plist["RunAtLoad"] = self.run_at_load
-        if self.enable_pressured_exit is not None:
-            plist["EnablePressuredExit"] = self.enable_pressured_exit
-        if self.enable_transactions is not None:
-            plist["EnableTransactions"] = self.enable_transactions
-        if self.exit_timeout is not None:
-            plist["ExitTimeout"] = self.exit_timeout
-        if self.throttle_interval is not None:
-            plist["ThrottleInterval"] = self.throttle_interval
-        if self.launch_only_once is not None:
-            plist["LaunchOnlyOnce"] = self.launch_only_once
-
-        kab = KeepAliveBuilder(
+        plist = self.model_dump(
+            by_alias=True,
+            exclude_none=True,
+            exclude={
+                "keep_alive",
+                "path_state",
+                "other_jobs",
+                "crashed",
+                "successful_exit",
+            },
+        )
+        kab = KeepAliveConfig(
             keep_alive=self.keep_alive,
             path_state=self.path_state,
             other_jobs=self.other_jobs,
@@ -492,44 +420,19 @@ class LaunchBehavior:
             plist["KeepAlive"] = ka
         return plist
 
-    @property
-    def exit_timeout(self) -> int | None:
-        return self._exit_timeout
 
-    @exit_timeout.setter
-    def exit_timeout(self, value: int | None) -> None:
-        if value is not None and value < 0:
-            msg = "ExitTimeout must be ≥ 0"
-            raise ValueError(msg)
-        self._exit_timeout = value
-
-    @property
-    def throttle_interval(self) -> int | None:
-        return self._throttle_interval
-
-    @throttle_interval.setter
-    def throttle_interval(self, value: int | None) -> None:
-        if value is not None and value < 0:
-            msg = "ThrottleInterval must be ≥ 0"
-            raise ValueError(msg)
-        self._throttle_interval = value
-
-
-@dataclass
-class LaunchdSchedule:
-    time: TimeTriggers = field(default_factory=TimeTriggers)
-    fs: FilesystemTriggers = field(default_factory=FilesystemTriggers)
-    events: EventTriggers = field(default_factory=EventTriggers)
-    behavior: LaunchBehavior = field(default_factory=LaunchBehavior)
+class LaunchdSchedule(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True, populate_by_name=True)
+    time: TimeTriggers = Field(default_factory=TimeTriggers)
+    fs: FilesystemTriggers = Field(default_factory=FilesystemTriggers)
+    events: EventTriggers = Field(default_factory=EventTriggers)
+    behavior: LaunchBehavior = Field(default_factory=LaunchBehavior)
 
     def add_cron(self, expr: str) -> None:
         self.time.add_cron(expr)
 
     def add_watch_path(self, path: str) -> None:
         self.fs.add_watch_path(path)
-
-    def add_socket(self, name: str, config: dict) -> None:
-        self.events.add_socket(name, config)
 
     def set_exit_timeout(self, seconds: int) -> None:
         if seconds < 0:
@@ -556,7 +459,7 @@ class LaunchdService:
     def __init__(
         self,
         bundle_identifier: str,
-        command: Sequence[str],
+        command: Sequence[str] | None,
         schedule: LaunchdSchedule,
         plist_path: Path | str | None = None,
         log_name: str | None = None,
@@ -564,14 +467,16 @@ class LaunchdService:
         stdout_log: Path | None = None,
         stderr_log: Path | None = None,
         launchctl_path: Path | None = None,
+        program: str | None = None,
         *,
         create_dir: bool = False,
     ):
-        if not command:
-            msg = "Missing required program arguments"
+        if not program and not command:
+            msg = "Missing required program or program arguments"
             raise TypeError(msg)
         self.bundle_identifier = bundle_identifier
-        self.command = list(command)
+        self.program = program
+        self.command = list(command) if command else []
         self.schedule = schedule
         self.create_dir = create_dir
 
@@ -631,7 +536,7 @@ class LaunchdService:
         plist = self.to_plist_dict()
         with self.plist_path.open("wb") as f:
             plistlib.dump(plist, f)
-        res = subprocess.run([self.launchctl_path, "load", str(self.plist_path)], check=False)
+        res = subprocess.run([self.launchctl_path, "load", str(self.plist_path)], check=False)  # noqa: S603
         if res.returncode != 0:
             raise subprocess.CalledProcessError(res.returncode, res.args)
 
@@ -640,10 +545,16 @@ class LaunchdService:
         self.plist_path.unlink(missing_ok=True)
 
     def to_plist_dict(self) -> dict:
-        return {
+        plist = {
             "Label": self.bundle_identifier,
-            "ProgramArguments": self.command,
             "StandardOutPath": str(self.stdout_log),
             "StandardErrorPath": str(self.stderr_log),
             **self.schedule.to_plist_dict(),
         }
+        if self.program:
+            plist["Program"] = self.program
+            if self.command:
+                plist["ProgramArguments"] = self.command
+        else:
+            plist["ProgramArguments"] = self.command
+        return plist
