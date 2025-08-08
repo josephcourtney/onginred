@@ -5,6 +5,7 @@ import time
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from onginred.core import (
     EventTriggers,
@@ -51,8 +52,27 @@ def test_time_triggers_interval():
 
 def test_time_triggers_invalid_interval():
     t = TimeTriggers()
-    with pytest.raises(ValueError, match=r"."):
+    with pytest.raises(ValidationError):
         t.set_start_interval(0)
+
+
+def test_time_triggers_default_plist():
+    assert TimeTriggers().to_plist_dict() == {}
+
+
+def test_validate_range_boundaries():
+    validate_range("Minute", 0, 0, 59)
+    validate_range("Minute", 59, 0, 59)
+
+
+def test_parse_cron_field_invalid_range():
+    with pytest.raises(ValueError, match=r"."):
+        _ = _parse_cron_field("0-100", 0, 59)
+
+
+def test_parse_cron_field_invalid_step():
+    with pytest.raises(ValueError, match=r"."):
+        _ = _parse_cron_field("*/0", 0, 59)
 
 
 def test_validate_range_error():
@@ -65,6 +85,10 @@ def test_parse_cron_field_range():
 
 
 # --- FilesystemTriggers ---
+
+
+def test_filesystem_triggers_default_plist():
+    assert FilesystemTriggers().to_plist_dict() == {}
 
 
 def test_filesystem_triggers():
@@ -81,6 +105,10 @@ def test_filesystem_triggers():
 # --- EventTriggers ---
 
 
+def test_event_triggers_default_plist():
+    assert EventTriggers().to_plist_dict() == {}
+
+
 def test_event_triggers_socket_and_mach():
     e = EventTriggers()
     e.add_socket("mysock", sock_type=SockType.STREAM, family=SockFamily.IPV4)
@@ -93,14 +121,20 @@ def test_event_triggers_socket_and_mach():
 
 def test_socket_string_type_rejected():
     e = EventTriggers()
-    with pytest.raises(ValueError, match=r"."):
+    with pytest.raises(ValidationError):
         e.add_socket("bad", sock_type="stream")  # type: ignore[arg-type]
 
 
 def test_socket_conflicting_fields():
     e = EventTriggers()
-    with pytest.raises(ValueError, match=r"."):
+    with pytest.raises(ValidationError):
         e.add_socket("bad", path_name="/tmp/sock", node_name="localhost")  # noqa: S108
+
+
+def test_socket_conflicting_fields_service():
+    e = EventTriggers()
+    with pytest.raises(ValidationError):
+        e.add_socket("bad", path_name="/tmp/sock", service_name=80)  # noqa: S108
 
 
 # --- LaunchBehavior ---
@@ -123,7 +157,7 @@ def test_launch_behavior_keep_alive_dict():
 
 def test_launch_behavior_negative_exit_timeout():
     lb = LaunchBehavior()
-    with pytest.raises(ValueError, match=r"."):
+    with pytest.raises(ValidationError):
         lb.exit_timeout = -1
 
 
@@ -374,7 +408,7 @@ def test_socket_all_fields_set():
 @pytest.mark.parametrize("invalid_type", ["invalid", 123])
 def test_socket_invalid_enum_values(invalid_type):
     e = EventTriggers()
-    with pytest.raises((AttributeError, ValueError)):
+    with pytest.raises(ValidationError):
         e.add_socket("bad_sock", sock_type=invalid_type)  # type: ignore[arg-type]
 
 
@@ -519,6 +553,32 @@ def test_program_field_precedence_over_programarguments():
     assert plist["Program"] == "/bin/echo"
     assert plist["ProgramArguments"][0] == "/usr/bin/ignored"
     assert plist["Program"] != plist["ProgramArguments"][0]
+
+
+def test_program_precedence_empty_arguments():
+    svc = LaunchdService(
+        "com.example.emptyargs",
+        [],
+        LaunchdSchedule(),
+        plist_path="/dev/null",
+        program="/bin/echo",
+    )
+    plist = svc.to_plist_dict()
+    assert plist["Program"] == "/bin/echo"
+    assert "ProgramArguments" not in plist
+
+
+def test_program_precedence_relative_arguments():
+    svc = LaunchdService(
+        "com.example.relative",
+        ["./foo"],
+        LaunchdSchedule(),
+        plist_path="/dev/null",
+        program="/bin/echo",
+    )
+    plist = svc.to_plist_dict()
+    assert plist["Program"] == "/bin/echo"
+    assert plist["ProgramArguments"][0] == "./foo"
 
 
 # Invalid Enum Value in Manual Socket Injection
@@ -690,7 +750,7 @@ def test_suppression_window_midnight_wraparound():
 
 def test_launch_behavior_negative_throttle_interval():
     lb = LaunchBehavior()
-    with pytest.raises(ValueError, match=r"."):
+    with pytest.raises(ValidationError):
         lb.throttle_interval = -10
 
 
