@@ -6,21 +6,21 @@ This file defines how You, an AI coding agent (LLMs, autonomous dev tools, etc.)
 
 ## Project Context
 
-You are contributing to `brocli`.
+You are contributing to `onginred`.
 
 ## Role
 
 
 Your responsibilities include:
 
-* Editing Python source files under `src/brocli/`
+* Editing Python source files under `src/onginred/`
 * Creating or editing test files under `tests/`
 * Preserving output determinism, testability, and extensibility
 * Respecting existing CLI conventions and internal architecture
 
 ## Directory Constraints
 
-* Source code: `src/brocli/`
+* Source code: `src/onginred/`
 * Tests: `tests/`
 * Do not write, or create files outside these directories unless explicitly instructed.
 

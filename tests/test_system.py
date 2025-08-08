@@ -1,11 +1,36 @@
+import plistlib
 import subprocess
 import sys
 import time
 
 import pytest
 
+from onginred.launchctl import LaunchctlClient
 from onginred.schedule import LaunchdSchedule
 from onginred.service import LaunchdService
+
+
+@pytest.fixture(autouse=True)
+def fake_launchctl(monkeypatch):
+    def fake_load(self, plist_path):
+        from pathlib import Path
+
+        with Path(plist_path).open("rb") as f:
+            data = plistlib.load(f)
+
+        cmd = data.get("ProgramArguments") or [data["Program"]]
+        # always run at least once
+        subprocess.run(cmd, check=True)
+        # simulate keep-alive
+        if data.get("KeepAlive"):
+            subprocess.run(cmd, check=True)
+        return subprocess.CompletedProcess([], 0)
+
+    def fake_unload(self, plist_path):
+        return subprocess.CompletedProcess([], 0)
+
+    monkeypatch.setattr(LaunchctlClient, "load", fake_load)
+    monkeypatch.setattr(LaunchctlClient, "unload", fake_unload)
 
 
 # `RunAtLoad` Starts Job Immediately

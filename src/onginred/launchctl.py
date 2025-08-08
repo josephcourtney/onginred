@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import logging
+import os
+import platform
 import shutil
 import subprocess  # noqa: S404
+import sys
 from pathlib import Path
+from subprocess import CompletedProcess, run  # noqa: S404
 from typing import TYPE_CHECKING
 
 from onginred.config import DEFAULT_LAUNCHCTL_PATH
@@ -26,7 +30,7 @@ logger = logging.getLogger(__name__)
 class LaunchctlClient:
     """Client responsible for executing ``launchctl`` commands."""
 
-    def __init__(self, path: Path | None = None, runner: CommandRunner = subprocess.run):
+    def __init__(self, path: Path | None = None, runner: CommandRunner = run):
         self.path = path or self._resolve_launchctl()
         self._runner = runner
 
@@ -56,10 +60,14 @@ class LaunchctlClient:
         )
         return res
 
-    def load(self, plist_path: Path) -> subprocess.CompletedProcess[str]:
-        """Load the given plist using ``launchctl load``."""
+    def load(self, plist_path: Path, *, _user_domain: bool = True) -> CompletedProcess[str]:
+        if sys.platform == "darwin" and platform.mac_ver()[0] >= "11":
+            domain = f"gui/{os.getuid()}"
+            return self._run("bootstrap", domain, str(plist_path), check=False)
         return self._run("load", str(plist_path), check=False)
 
     def unload(self, plist_path: Path) -> subprocess.CompletedProcess[str]:
-        """Unload the given plist using ``launchctl unload``."""
+        if sys.platform == "darwin" and platform.mac_ver()[0] >= "11":
+            domain = f"gui/{os.getuid()}"
+            return self._run("bootout", domain, str(plist_path), check=True)
         return self._run("unload", str(plist_path), check=True)
