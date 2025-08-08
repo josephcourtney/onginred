@@ -5,6 +5,7 @@ launchd.plist – System wide and per-user daemon/agent configuration files
 
 ## Description
 This document details the parameters that can be given to an XML property list that can be loaded into launchd with launchctl.
+Configuration in this project is defined with [Pydantic](https://docs.pydantic.dev/) models rather than dataclasses or manual dictionaries.
 
 ## Expectations
 Daemons or agents managed by launchd are expected to behave certain ways.

@@ -95,30 +95,53 @@ class KeepAliveConfig(BaseModel):
 def _parse_cron_field(field: str, lo: int, hi: int) -> list[int]:
     if field == "*":
         return list(range(lo, hi + 1))
-    values = set()
+    values: set[int] = set()
     for part in field.split(","):
         if "/" in part:
-            base, step = part.split("/")
-            step = int(step)
+            base, step_s = part.split("/")
+            try:
+                step = int(step_s)
+            except ValueError as e:
+                msg = f"Invalid cron field part: {part}"
+                raise ValueError(msg) from e
+            if step <= 0:
+                msg = "step must be > 0"
+                raise ValueError(msg)
             base_range = _parse_cron_field(base, lo, hi)
             values.update(v for v in base_range if (v - lo) % step == 0)
         elif "-" in part:
-            start, end = map(int, part.split("-"))
+            start_s, end_s = part.split("-")
+            try:
+                start, end = int(start_s), int(end_s)
+            except ValueError as e:
+                msg = f"Invalid cron field part: {part}"
+                raise ValueError(msg) from e
+            validate_range("cron range start", start, lo, hi)
+            validate_range("cron range end", end, lo, hi)
+            if start > end:
+                msg = "start cannot exceed end"
+                raise ValueError(msg)
             values.update(range(start, end + 1))
         else:
-            values.add(int(part))
+            try:
+                val = int(part)
+            except ValueError as e:
+                msg = f"Invalid cron field part: {part}"
+                raise ValueError(msg) from e
+            validate_range("cron value", val, lo, hi)
+            values.add(val)
     return sorted(values)
 
 
 class SocketConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
-    sock_type: SockType | None = Field(default=None, alias="SockType")
+    sock_type: SockType | None = Field(default=None, alias="SockType", strict=True)
     passive: bool | None = Field(default=None, alias="SockPassive")
     node_name: str | None = Field(default=None, alias="SockNodeName")
     service_name: str | int | None = Field(default=None, alias="SockServiceName")
-    family: SockFamily | None = Field(default=None, alias="SockFamily")
-    protocol: SockProtocol | None = Field(default=None, alias="SockProtocol")
+    family: SockFamily | None = Field(default=None, alias="SockFamily", strict=True)
+    protocol: SockProtocol | None = Field(default=None, alias="SockProtocol", strict=True)
     path_name: str | None = Field(default=None, alias="SockPathName")
     secure_socket_key: str | None = Field(default=None, alias="SecureSocketWithKey")
     path_owner: int | None = Field(default=None, alias="SockPathOwner")
@@ -148,7 +171,7 @@ class SocketConfig(BaseModel):
 class TimeTriggers(BaseModel):
     model_config = ConfigDict(validate_assignment=True, populate_by_name=True)
     calendar_entries: list[dict[str, int]] = Field(default_factory=list, alias="StartCalendarInterval")
-    start_interval: int | None = Field(None, alias="StartInterval")
+    start_interval: int | None = Field(None, alias="StartInterval", gt=0)
 
     def add_calendar_entry(
         self,
@@ -228,9 +251,6 @@ class TimeTriggers(BaseModel):
             self.add_calendar_entry(minute=m)
 
     def set_start_interval(self, seconds: int) -> None:
-        if seconds <= 0:
-            msg = "StartInterval must be > 0"
-            raise ValueError(msg)
         self.start_interval = seconds
 
     def to_plist_dict(self) -> dict[str, Any]:
@@ -317,9 +337,6 @@ class EventTriggers(BaseModel):
         bonjour: bool | str | list[str] | None = None,
         multicast_group: str | None = None,
     ) -> None:
-        if sock_type is not None and not isinstance(sock_type, SockType):
-            msg = f"Invalid SockType: {sock_type!r}"
-            raise ValueError(msg)
         cfg = SocketConfig(
             sock_type=sock_type,
             passive=passive,
@@ -435,15 +452,9 @@ class LaunchdSchedule(BaseModel):
         self.fs.add_watch_path(path)
 
     def set_exit_timeout(self, seconds: int) -> None:
-        if seconds < 0:
-            msg = "ExitTimeout must be ≥ 0"
-            raise ValueError(msg)
         self.behavior.exit_timeout = seconds
 
     def set_throttle_interval(self, seconds: int) -> None:
-        if seconds < 0:
-            msg = "ThrottleInterval must be ≥ 0"
-            raise ValueError(msg)
         self.behavior.throttle_interval = seconds
 
     def to_plist_dict(self) -> dict[str, Any]:
