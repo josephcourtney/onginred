@@ -1,5 +1,7 @@
 from importlib.metadata import version
 
-__all__ = ["__version__"]
+from .sockets import SockFamily, SockProtocol, SockType
+
+__all__ = ["SockFamily", "SockProtocol", "SockType", "__version__"]
 
 __version__ = version("onginred")
