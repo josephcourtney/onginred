@@ -42,7 +42,7 @@
   build-backend = "uv_build"
 
 [tool.uv.sources]
-  jkit = { git = "ssh://git@github.com/josephcourtney/jkit.git" }
+  jkit = { git = "https://git@github.com/josephcourtney/jkit" }
 
 # ==================================== lint ====================================
 [tool.ruff]
