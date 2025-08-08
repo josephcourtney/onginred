@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from typing import Any, cast
 from unittest.mock import patch
 
 import pytest
@@ -102,12 +103,12 @@ def test_relative_path_no_default_directory(fs):
 
 def test_invalid_permission_type(fs):
     with pytest.raises(TypeError):
-        ensure_path("/a.txt", permissions="644")
+        ensure_path("/a.txt", permissions=cast("Any", "644"))
 
 
 def test_invalid_target_type_type(fs):
     with pytest.raises(TypeError):
-        ensure_path("/a", target_type=123)
+        ensure_path("/a", target_type=cast("Any", 123))
 
 
 def test_set_posix_permissions_chmod_fails(monkeypatch):
@@ -125,12 +126,12 @@ def test_set_posix_permissions_chmod_fails(monkeypatch):
 
 def test_invalid_target_type_type_object(tmp_path):
     with pytest.raises(TypeError, match="Invalid target type"):
-        ensure_path(12345, default_directory=tmp_path, target_type="file")
+        ensure_path(cast("Any", 12345), default_directory=tmp_path, target_type="file")
 
 
 def test_invalid_default_directory_type():
     with pytest.raises(TypeError, match="default_directory must be a Path object"):
-        ensure_path("file.txt", default_directory=123, target_type="file")
+        ensure_path("file.txt", default_directory=cast("Any", 123), target_type="file")
 
 
 def test_file_exists_where_directory_expected_disallow(fs):
