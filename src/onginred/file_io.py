@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 import platform
 import stat
@@ -11,6 +12,9 @@ from pathlib import Path
 class TargetType(Enum):
     FILE = "file"
     DIRECTORY = "directory"
+
+
+logger = logging.getLogger(__name__)
 
 
 def _is_posix() -> bool:
@@ -40,6 +44,7 @@ def _validate_and_resolve_target(
         raise TypeError(msg)
 
     path = Path(target)
+    logger.debug("received target", extra={"target": str(target)})
 
     if not path.is_absolute():
         if default_directory is None:
@@ -50,7 +55,9 @@ def _validate_and_resolve_target(
             raise TypeError(msg)
         path = default_directory / path
 
-    return path.resolve() if resolve_symlinks else path.absolute()
+    resolved = path.resolve() if resolve_symlinks else path.absolute()
+    logger.debug("resolved target", extra={"path": str(resolved)})
+    return resolved
 
 
 def _ensure_directory(path: Path, *, allow_existing: bool) -> None:
@@ -66,6 +73,8 @@ def _ensure_directory(path: Path, *, allow_existing: bool) -> None:
     except OSError as e:
         msg = f"Cannot create directory at {path}."
         raise OSError(msg) from e
+    else:
+        logger.info("ensured directory", extra={"path": str(path)})
 
 
 def _ensure_file(path: Path, *, allow_existing: bool) -> None:
@@ -97,6 +106,7 @@ def _ensure_file(path: Path, *, allow_existing: bool) -> None:
         except OSError as e:
             msg = f"Cannot create file at {path}: {e}"
             raise OSError(msg) from e
+    logger.info("ensured file", extra={"path": str(path)})
 
 
 def ensure_path(
@@ -149,6 +159,7 @@ def ensure_path(
         - On POSIX systems, permissions are applied only when the path is newly created.
     """
     path = _validate_and_resolve_target(target, default_directory, resolve_symlinks=resolve_symlinks)
+    logger.debug("validated target", extra={"path": str(path), "type": str(target_type)})
 
     if permissions is not None and not isinstance(permissions, int):
         msg = f"permissions must be int or None, got {type(permissions).__name__}"
@@ -180,5 +191,5 @@ def ensure_path(
             raise NotImplementedError(msg)
 
         _set_posix_permissions(path, permissions)
-
+    logger.info("validated path", extra={"path": str(path)})
     return path

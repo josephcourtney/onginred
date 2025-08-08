@@ -1,3 +1,13 @@
+## [0.0.5] - 2025-08-08
+
+### Added
+- add launchctl client and command runner protocol
+- add centralized configuration constants and structured logging
+
+### Changed
+- refactor keep-alive helpers and schedule serialization
+- delegate launchctl invocation to dedicated client
+
 ## [0.0.4] - 2025-08-08
 
 ### Added

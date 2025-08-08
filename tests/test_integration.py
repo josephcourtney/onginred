@@ -3,10 +3,18 @@ import subprocess
 from pathlib import Path
 
 from onginred.behavior import LaunchBehavior
+from onginred.launchctl import LaunchctlClient
 from onginred.schedule import LaunchdSchedule
 from onginred.service import LaunchdService
 
 DEFAULT_LAUNCHCTL = Path("/bin/true")
+
+
+def make_client() -> LaunchctlClient:
+    return LaunchctlClient(
+        path=DEFAULT_LAUNCHCTL,
+        runner=lambda args, *, check: subprocess.CompletedProcess(args, 0),
+    )
 
 
 # Validate .plist via `plutil -lint`
@@ -17,8 +25,7 @@ def test_generated_plist_is_valid(tmp_path):
         ["echo", "hello"],
         LaunchdSchedule(),
         plist_path=plist_path,
-        runner=lambda *a, **kw: subprocess.CompletedProcess(a[0], 0),
-        launchctl_path=DEFAULT_LAUNCHCTL,
+        launchctl=make_client(),
     )
     svc.install()
     with plist_path.open("rb") as f:
@@ -44,7 +51,7 @@ def test_program_field_precedence_over_programarguments():
         LaunchdSchedule(),
         plist_path="/dev/null",
         program="/bin/echo",
-        launchctl_path=DEFAULT_LAUNCHCTL,
+        launchctl=make_client(),
     )
     plist = svc.to_plist_dict()
     assert plist["Program"] == "/bin/echo"
@@ -60,7 +67,7 @@ def test_environment_variables_included():
         ["echo"],
         LaunchdSchedule(),
         plist_path="/dev/null",
-        launchctl_path=DEFAULT_LAUNCHCTL,
+        launchctl=make_client(),
     ).to_plist_dict()
     plist["EnvironmentVariables"] = {"FOO": "bar"}
     assert plist["EnvironmentVariables"]["FOO"] == "bar"
