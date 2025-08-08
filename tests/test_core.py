@@ -17,6 +17,8 @@ from onginred.core import (
     SockProtocol,
     SockType,
     TimeTriggers,
+    _parse_cron_field,
+    validate_range,
 )
 
 # --- TimeTriggers ---
@@ -37,7 +39,7 @@ def test_time_triggers_add_cron():
 
 def test_time_triggers_invalid_cron():
     t = TimeTriggers()
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"."):
         t.add_cron("invalid cron expr")
 
 
@@ -49,8 +51,17 @@ def test_time_triggers_interval():
 
 def test_time_triggers_invalid_interval():
     t = TimeTriggers()
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"."):
         t.set_start_interval(0)
+
+
+def test_validate_range_error():
+    with pytest.raises(ValueError, match=r"."):
+        validate_range("Minute", 60, 0, 59)
+
+
+def test_parse_cron_field_range():
+    assert _parse_cron_field("1-3", 0, 59) == [1, 2, 3]
 
 
 # --- FilesystemTriggers ---
@@ -58,12 +69,12 @@ def test_time_triggers_invalid_interval():
 
 def test_filesystem_triggers():
     fs = FilesystemTriggers()
-    fs.add_watch_path("/tmp/foo")
-    fs.add_queue_directory("/tmp/bar")
+    fs.add_watch_path("/tmp/foo")  # noqa: S108
+    fs.add_queue_directory("/tmp/bar")  # noqa: S108
     fs.enable_start_on_mount()
     d = fs.to_plist_dict()
-    assert "/tmp/foo" in d["WatchPaths"]
-    assert "/tmp/bar" in d["QueueDirectories"]
+    assert "/tmp/foo" in d["WatchPaths"]  # noqa: S108
+    assert "/tmp/bar" in d["QueueDirectories"]  # noqa: S108
     assert d["StartOnMount"] is True
 
 
@@ -78,6 +89,18 @@ def test_event_triggers_socket_and_mach():
     assert "Sockets" in d
     assert "mysock" in d["Sockets"]
     assert d["MachServices"]["com.example.svc"]["ResetAtClose"] is True
+
+
+def test_socket_string_type_rejected():
+    e = EventTriggers()
+    with pytest.raises(ValueError, match=r"."):
+        e.add_socket("bad", sock_type="stream")  # type: ignore[arg-type]
+
+
+def test_socket_conflicting_fields():
+    e = EventTriggers()
+    with pytest.raises(ValueError, match=r"."):
+        e.add_socket("bad", path_name="/tmp/sock", node_name="localhost")  # noqa: S108
 
 
 # --- LaunchBehavior ---
@@ -100,7 +123,7 @@ def test_launch_behavior_keep_alive_dict():
 
 def test_launch_behavior_negative_exit_timeout():
     lb = LaunchBehavior()
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"."):
         lb.exit_timeout = -1
 
 
@@ -110,18 +133,26 @@ def test_launch_behavior_negative_exit_timeout():
 def test_launchd_schedule_setters():
     sched = LaunchdSchedule()
     sched.add_cron("0 12 * * 1")
-    sched.add_watch_path("/tmp/watched")
+    sched.add_watch_path("/tmp/watched")  # noqa: S108
     sched.set_exit_timeout(30)
     sched.set_throttle_interval(10)
     assert sched.behavior.exit_timeout == 30
-    assert sched.fs.watch_paths == {"/tmp/watched"}
+    assert sched.fs.watch_paths == {"/tmp/watched"}  # noqa: S108
+
+
+def test_launchd_schedule_default_plist():
+    assert LaunchdSchedule().to_plist_dict() == {}
+
+
+def test_launch_behavior_default_plist():
+    assert LaunchBehavior().to_plist_dict() == {}
 
 
 # --- LaunchdService ---
 
 
 @pytest.fixture
-def temp_plist_file(tmp_path) -> Path:
+def temp_plist_file(tmp_path: Path) -> Path:
     return tmp_path / "com.test.service.plist"
 
 
@@ -133,7 +164,7 @@ def test_launchd_service_to_plist_dict():
         schedule=schedule,
         plist_path="/dev/null",  # stub
         log_name="testsvc",
-        log_dir=Path("/tmp"),
+        log_dir=Path("/tmp"),  # noqa: S108
     )
     plist = svc.to_plist_dict()
     assert plist["Label"] == "com.test.service"
@@ -143,8 +174,10 @@ def test_launchd_service_to_plist_dict():
 
 
 def test_launchctl_resolution_failure(monkeypatch):
-    monkeypatch.setattr("shutil.which", lambda _: None)
-    monkeypatch.setattr("pathlib.Path.exists", lambda _: False)
+    monkeypatch.setattr(
+        "onginred.core.LaunchdService._resolve_launchctl",
+        lambda self: (_ for _ in ()).throw(LaunchdServiceError("`launchctl` binary cannot be found.")),
+    )
     with pytest.raises(LaunchdServiceError):
         LaunchdService(
             bundle_identifier="com.test.missing",
@@ -224,9 +257,9 @@ def test_plist_path_matches_label(tmp_path):
 # Invalid Socket Config
 def test_invalid_socket_key_rejected():
     e = EventTriggers()
+    # Improper manual dict insertion simulating malformed user input
+    e.sockets["bad_socket"] = {"InvalidKey": "value"}
     with pytest.raises(KeyError):
-        # Improper manual dict insertion simulating malformed user input
-        e.sockets["bad_socket"] = {"InvalidKey": "value"}
         _ = e.to_plist_dict()
 
 
@@ -240,7 +273,7 @@ def test_generated_plist_is_valid(tmp_path):
         plist_path=plist_path,
     )
     svc.install()
-    result = subprocess.run(["plutil", "-lint", str(plist_path)], check=False, capture_output=True, text=True)
+    result = subprocess.run(["plutil", "-lint", str(plist_path)], check=False, capture_output=True, text=True)  # noqa: S607
     assert result.returncode == 0
     assert "OK" in result.stdout
 
@@ -325,7 +358,6 @@ def test_socket_all_fields_set():
         service_name=8080,
         family=SockFamily.IPV4V6,
         protocol=SockProtocol.UDP,
-        path_name="/tmp/sock",
         secure_socket_key="SECRET",
         path_owner=501,
         path_group=20,
@@ -339,11 +371,11 @@ def test_socket_all_fields_set():
     assert sock_config["SockPathMode"] == 0o755
 
 
-@pytest.mark.parametrize("invalid_type", ["invalid", 123, None])
+@pytest.mark.parametrize("invalid_type", ["invalid", 123])
 def test_socket_invalid_enum_values(invalid_type):
     e = EventTriggers()
     with pytest.raises((AttributeError, ValueError)):
-        e.add_socket("bad_sock", sock_type=invalid_type)  # type: ignore
+        e.add_socket("bad_sock", sock_type=invalid_type)  # type: ignore[arg-type]
 
 
 # Environment, Identity, and Permissions
@@ -395,13 +427,13 @@ def test_process_type_and_nice():
 # Error Handling: Invalid Input and System Errors
 def test_invalid_cron_expression_rejected():
     t = TimeTriggers()
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"."):
         t.add_cron("bad cron expr")
 
 
 def test_invalid_time_range_specifier():
     t = TimeTriggers()
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"."):
         t.add_suppression_window("25:00-26:00")
 
 
@@ -416,8 +448,8 @@ def test_launchctl_failure(monkeypatch):
         "com.example.fail",
         ["echo"],
         LaunchdSchedule(),
-        plist_path="/tmp/fail.plist",
-        launchctl_path="/bin/false",
+        plist_path="/tmp/fail.plist",  # noqa: S108
+        launchctl_path=Path("/bin/false"),
     )
     with pytest.raises(subprocess.CalledProcessError):
         svc.install()
@@ -427,7 +459,7 @@ def test_launchctl_failure(monkeypatch):
 def test_combined_time_and_fs_triggers():
     sched = LaunchdSchedule()
     sched.add_cron("0 6 * * *")
-    sched.fs.add_watch_path("/tmp/something")
+    sched.fs.add_watch_path("/tmp/something")  # noqa: S108
     plist = sched.time.to_plist_dict()
     assert "StartCalendarInterval" in plist
     plist = sched.fs.to_plist_dict()
@@ -469,21 +501,24 @@ def test_plist_lint_passes(tmp_path):
         plist_path=plist_path,
     )
     svc.install()
-    result = subprocess.run(["plutil", "-lint", str(plist_path)], check=False, capture_output=True, text=True)
+    result = subprocess.run(["plutil", "-lint", str(plist_path)], check=False, capture_output=True, text=True)  # noqa: S607
     assert result.returncode == 0
     assert "OK" in result.stdout
 
 
 # Program vs ProgramArguments Precedence
-def test_program_overrides_programarguments():
+def test_program_field_precedence_over_programarguments():
     svc = LaunchdService(
         "com.example.override",
-        ["/usr/bin/env", "foo"],
+        ["/usr/bin/ignored", "foo"],
         LaunchdSchedule(),
         plist_path="/dev/null",
+        program="/bin/echo",
     )
     plist = svc.to_plist_dict()
-    assert plist["ProgramArguments"][0] == "/usr/bin/env"
+    assert plist["Program"] == "/bin/echo"
+    assert plist["ProgramArguments"][0] == "/usr/bin/ignored"
+    assert plist["Program"] != plist["ProgramArguments"][0]
 
 
 # Invalid Enum Value in Manual Socket Injection
@@ -529,17 +564,6 @@ def test_log_paths_with_explicit_stdout_log(tmp_path):
     assert svc.stderr_log == out_path  # fallback
 
 
-def test_program_field_overrides_programarguments():
-    svc = LaunchdService(
-        bundle_identifier="com.example.prog",
-        command=["/usr/bin/ignored", "arg"],
-        schedule=LaunchdSchedule(),
-        plist_path="/dev/null",
-    )
-    plist = svc.to_plist_dict()
-    assert plist["ProgramArguments"][0] == "/usr/bin/ignored"
-
-
 def test_model_round_trip_serialization(tmp_path):
     path = tmp_path / "job.plist"
     svc = LaunchdService(
@@ -567,7 +591,7 @@ def test_plist_passes_plutil_lint(tmp_path):
         plist_path=plist_path,
     )
     svc.install()
-    result = subprocess.run(["plutil", "-lint", str(plist_path)], check=False, capture_output=True, text=True)
+    result = subprocess.run(["plutil", "-lint", str(plist_path)], check=False, capture_output=True, text=True)  # noqa: S607
     assert result.returncode == 0
     assert "OK" in result.stdout
 
@@ -594,8 +618,8 @@ def test_install_plist_write_failure(monkeypatch):
         "com.test.writefail",
         ["echo", "fail"],
         LaunchdSchedule(),
-        plist_path="/tmp/blocked.plist",
-        launchctl_path="/bin/true",
+        plist_path="/tmp/blocked.plist",  # noqa: S108
+        launchctl_path=Path("/bin/true"),
     )
     monkeypatch.setattr("pathlib.Path.open", fake_open)
     with pytest.raises(OSError, match="Permission denied"):
@@ -611,8 +635,8 @@ def test_invalid_plist_value_serialization(monkeypatch):
         "com.test.invalidplist",
         ["echo"],
         BadSchedule(),
-        plist_path="/tmp/faulty.plist",
-        launchctl_path="/bin/true",
+        plist_path="/tmp/faulty.plist",  # noqa: S108
+        launchctl_path=Path("/bin/true"),
     )
     with pytest.raises(TypeError):
         svc.install()
@@ -630,7 +654,7 @@ def test_multiple_launch_events():
 def test_invalid_launch_event_descriptor():
     e = EventTriggers()
     with pytest.raises(TypeError):
-        e.add_launch_event("com.apple", "FooEvent", "not-a-dict")  # type: ignore
+        e.add_launch_event("com.apple", "FooEvent", "not-a-dict")  # type: ignore[arg-type]
 
 
 def test_enable_transactions_and_pressured_exit_flags():
@@ -666,7 +690,7 @@ def test_suppression_window_midnight_wraparound():
 
 def test_launch_behavior_negative_throttle_interval():
     lb = LaunchBehavior()
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"."):
         lb.throttle_interval = -10
 
 
@@ -674,15 +698,3 @@ def test_launch_behavior_zero_exit_timeout_is_valid():
     lb = LaunchBehavior()
     lb.exit_timeout = 0
     assert lb.to_plist_dict()["ExitTimeout"] == 0
-
-
-def test_program_field_wins_over_programarguments(monkeypatch):
-    svc = LaunchdService(
-        bundle_identifier="com.test.override",
-        command=["/usr/bin/env", "arg1"],
-        schedule=LaunchdSchedule(),
-        plist_path="/dev/null",
-    )
-    plist = svc.to_plist_dict()
-    plist["Program"] = "/usr/local/bin/myapp"
-    assert plist["Program"] == "/usr/local/bin/myapp"

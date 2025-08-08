@@ -1,7 +1,7 @@
 # =================================== project ====================================
 [project]
   name = "onginred"
-  version = "0.0.1"
+  version = "0.0.2"
   description = "manager for macos launchd services"
   readme = "README.md"
   authors = [
@@ -18,7 +18,8 @@
   requires-python = ">=3.13"
   dependencies = [
     "croniter>=6.0.0",
-  ]
+    "pydantic>=2.11.7",
+]
 
   # [project.scripts]
   #   onginred = "onginred.cli:main" # may be added later

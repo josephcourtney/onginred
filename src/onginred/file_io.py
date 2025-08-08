@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import platform
+import stat
 from enum import Enum
 from os import PathLike
 from pathlib import Path
@@ -81,7 +82,9 @@ def _ensure_file(path: Path, *, allow_existing: bool) -> None:
         if not allow_existing:
             msg = f"File exists at {path} and allow_existing is False."
             raise FileExistsError(msg)
-        if not os.access(path, os.W_OK):
+        mode = path.stat().st_mode
+        writable = bool(mode & (stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH))
+        if not writable or not os.access(path, os.W_OK):
             msg = f"File exists at {path} but is not writable."
             raise OSError(msg)
     else:
