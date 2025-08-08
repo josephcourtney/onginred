@@ -8,12 +8,12 @@ import subprocess  # noqa: S404
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from .file_io import ensure_path
+from onginred.file_io import ensure_path
 
 if TYPE_CHECKING:  # pragma: no cover - type checking only
     from collections.abc import Callable, Sequence
 
-    from .core import LaunchdSchedule
+    from onginred.schedule import LaunchdSchedule
 
 __all__ = ["LaunchdService", "LaunchdServiceError"]
 

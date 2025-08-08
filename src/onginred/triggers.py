@@ -7,7 +7,8 @@ from typing import Any, Final
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from . import cron
+from onginred import cron
+from onginred.sockets import SocketConfig, SockFamily, SockProtocol, SockType
 
 __all__ = ["FilesystemTriggers", "TimeTriggers"]
 
@@ -124,4 +125,97 @@ class FilesystemTriggers(BaseModel):
             plist["WatchPaths"] = sorted(plist["WatchPaths"])
         if "QueueDirectories" in plist:
             plist["QueueDirectories"] = sorted(plist["QueueDirectories"])
+        return plist
+
+
+class EventTriggers(BaseModel):
+    model_config = ConfigDict(validate_assignment=True, populate_by_name=True)
+
+    launch_events: dict[str, dict[str, dict]] = Field(default_factory=dict, alias="LaunchEvents")
+    sockets: dict[str, dict] = Field(default_factory=dict, alias="Sockets")
+    mach_services: dict[str, bool | dict] = Field(default_factory=dict, alias="MachServices")
+
+    def add_launch_event(self, subsystem: str, event_name: str, descriptor: dict) -> None:
+        if not isinstance(descriptor, dict):
+            msg = "descriptor must be a dict"
+            raise TypeError(msg)
+        self.launch_events.setdefault(subsystem, {})[event_name] = descriptor
+
+    def add_socket(
+        self,
+        name: str,
+        *,
+        sock_type: SockType | None = None,
+        passive: bool | None = None,
+        node_name: str | None = None,
+        service_name: str | int | None = None,
+        family: SockFamily | None = None,
+        protocol: SockProtocol | None = None,
+        path_name: str | None = None,
+        secure_socket_key: str | None = None,
+        path_owner: int | None = None,
+        path_group: int | None = None,
+        path_mode: int | None = None,
+        bonjour: bool | str | list[str] | None = None,
+        multicast_group: str | None = None,
+    ) -> None:
+        cfg = SocketConfig(
+            sock_type=sock_type,
+            passive=passive,
+            node_name=node_name,
+            service_name=service_name,
+            family=family,
+            protocol=protocol,
+            path_name=path_name,
+            secure_socket_key=secure_socket_key,
+            path_owner=path_owner,
+            path_group=path_group,
+            path_mode=path_mode,
+            bonjour=bonjour,
+            multicast_group=multicast_group,
+        )
+        self.sockets[name] = cfg.as_dict()
+
+    def add_mach_service(
+        self,
+        name: str,
+        *,
+        reset_at_close: bool = False,
+        hide_until_checkin: bool = False,
+    ) -> None:
+        config: dict | bool = {}
+        if reset_at_close:
+            config["ResetAtClose"] = True
+        if hide_until_checkin:
+            config["HideUntilCheckIn"] = True
+        self.mach_services[name] = config or True
+
+    def to_plist_dict(self) -> dict[str, Any]:
+        plist: dict[str, Any] = {}
+        if self.launch_events:
+            plist["LaunchEvents"] = self.launch_events
+        if self.sockets:
+            allowed = {
+                "SockType",
+                "SockPassive",
+                "SockNodeName",
+                "SockServiceName",
+                "SockFamily",
+                "SockProtocol",
+                "SockPathName",
+                "SecureSocketWithKey",
+                "SockPathOwner",
+                "SockPathGroup",
+                "SockPathMode",
+                "Bonjour",
+                "MulticastGroup",
+            }
+            for config in self.sockets.values():
+                invalid = set(config) - allowed
+                if invalid:
+                    msg = f"Invalid socket keys: {invalid}"
+                    raise KeyError(msg)
+            plist["Sockets"] = self.sockets
+        if self.mach_services:
+            plist["MachServices"] = self.mach_services
         return plist

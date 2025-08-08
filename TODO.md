@@ -1,33 +1,19 @@
-- [x]  Extract `triggers.py`
-  - Move `TimeTriggers` and `FilesystemTriggers` from `core.py`.
-  - Add `__all__` to the new module.
-  - Update all imports: `from onginred.core import TimeTriggers` → `from onginred.triggers import TimeTriggers`.
-- [x]  Extract `sockets.py`:
-  - New module containing `SockType`, `SockFamily`, `SockProtocol`, `SocketConfig`, `_parse_cron_field` (cron helper stays for now).
-  - Update `EventTriggers.add_socket` import path.
-  - Ensure `__init__.py` re-exports enums for external API stability.
-- [x]  Extract `behavior.py`:
-  - Move `KeepAliveConfig`, `LaunchBehavior`.
-  - Implement the refactored `KeepAliveConfig.as_plist()` method (see §3).
-  - Remove the old `build()` method entirely.
-- [x]  Extract `service.py`:
-  - Move `LaunchdService` out of `core.py`
-- [x]  Replace `KeepAliveConfig.build` → `as_plist`:
-  - Implement new logic:  `def as_plist(self) -> bool dict | None: ...  # see design doc`
-  - Unit-test matrix: plain `True`, dict merge, mixed sub-fields, all-empty → `None`. |
-- [x]  Wire into `LaunchBehavior`:
-  - Adjust `LaunchBehavior.to_plist_dict` to call `self._keep_alive.as_plist()`.
-  - Ensure previous public behaviour is unchanged.
-- [x]  Update tests:
-  - Remove global monkey-patch in `tests/conftest.py`; instead pass `runner=lambda *a, kw: subprocess.CompletedProcess(a, 0)` where needed.
-  - Ensure concurrency tests still work (no global state).
-- [x]  Create `cron.py` helper:
-  - Move `_parse_cron_field` + `validate_range` + `add_cron` inner loops.
-  - `TimeTriggers.add_cron` becomes one-liner delegating to `cron.expand(expr)`.
-  - Add parameterised pytest cases covering ranges, steps, errors.
-- [x]  Review `_expand_range` semantics:
-  - Decide if minute-only expansion is intended; if not, refactor to return `(hour, minute)` tuples and update suppression-window logic & tests.
-- [x] On methods with many parameters, make less-common or optional parameters keyword-only
-- [x] Introduce `runner` parameter to make running subprocesses injectable
-  - In `LaunchdService.__init__` add `runner: Callable[..., subprocess.CompletedProcess] = subprocess.run`.
-  - Replace *all* calls to `subprocess.run` with `self._runner`.
+* [ ] Split `LaunchdService` into smaller single-responsibility-principle-focused components:
+  * Delegate `launchctl` invocation to a `LaunchctlClient`.
+* [ ] Define protocol interfaces:
+  * Create `CommandRunner` protocol to formalize runner signature (`__call__` with subprocess args).
+* [ ] Extract default paths to `config.py` module:
+  * `DEFAULT_LOG_LOCATION = Path("/var/log/")`
+  * `DEFAULT_INSTALL_LOCATION = Path.home() / "Library" / "LaunchAgents"`
+  * `DEFAULT_LAUNCHCTL_PATH = Path("/bin/launchctl")`
+* [ ] Centralize configuration constants across modules for clarity and reuse.
+* [ ] Add structured logging across:
+  * Path validation and file I/O
+  * `launchctl` command execution
+  * `.plist` serialization and installation
+* [ ] Clarify implicit behavior:
+  * Make `LaunchdSchedule.to_plist_dict()` behavior more explicit or document interactions between subcomponents more clearly.
+* [ ] Split large conditionals and logic inside `KeepAliveConfig.as_plist` into smaller helper methods.
+* [ ] Add docstrings to internal helper classes/functions, especially ones that perform transformation logic.
+* [ ] Formalize and type-check the `runner` callable using a defined protocol.
+* [ ] Introduce mocks for `LaunchctlClient` in future test cases after component split.

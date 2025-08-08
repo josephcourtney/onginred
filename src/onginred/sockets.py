@@ -6,7 +6,7 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from .cron import validate_range
+from onginred.cron import validate_range
 
 __all__ = [
     "SockFamily",
