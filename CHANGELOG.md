@@ -1,3 +1,12 @@
+## [0.1.0] - 2025-08-09
+
+### Added
+- add CLI for scaffolding and inspecting plist files
+- add asynchronous install/uninstall helpers
+- add builder with fluent schedule configuration
+- add property-based tests using Hypothesis
+- add quick-start usage example and repr helpers
+
 ## [0.0.6] - 2025-08-08
 
 ### Added
