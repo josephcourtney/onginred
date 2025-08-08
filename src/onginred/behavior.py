@@ -16,16 +16,16 @@ class KeepAliveConfig(BaseModel):
     crashed: bool | None = None
     successful_exit: bool | None = None
 
-    def as_plist(self) -> bool | dict | None:
-        """Return the launchd ``KeepAlive`` representation."""
-        base: dict | None
+    def _base_from_keep_alive(self) -> dict | None:
+        """Derive the initial dictionary from ``keep_alive``."""
         if isinstance(self.keep_alive, dict):
-            base = dict(self.keep_alive)
-        elif self.keep_alive is True:
-            base = {}
-        else:
-            base = None
+            return dict(self.keep_alive)
+        if self.keep_alive is True:
+            return {}
+        return None
 
+    def _merge_optional(self, base: dict | None) -> dict | None:
+        """Merge optional configuration fields into ``base``."""
         if self.path_state:
             base = base or {}
             base["PathState"] = self.path_state
@@ -38,7 +38,12 @@ class KeepAliveConfig(BaseModel):
         if self.successful_exit is not None:
             base = base or {}
             base["SuccessfulExit"] = self.successful_exit
+        return base
 
+    def as_plist(self) -> bool | dict | None:
+        """Return the launchd ``KeepAlive`` representation."""
+        base = self._base_from_keep_alive()
+        base = self._merge_optional(base)
         if base is None:
             return None
         if self.keep_alive is True and not base:

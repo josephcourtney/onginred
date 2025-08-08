@@ -4,10 +4,19 @@ from pathlib import Path
 
 import pytest
 
+from onginred.launchctl import LaunchctlClient, LaunchctlError
 from onginred.schedule import LaunchdSchedule
-from onginred.service import LaunchdService, LaunchdServiceError
+from onginred.service import LaunchdService
 
 DEFAULT_LAUNCHCTL = Path("/bin/true")
+
+
+def make_client(returncode: int = 0, path: Path = DEFAULT_LAUNCHCTL) -> LaunchctlClient:
+    """Create a ``LaunchctlClient`` returning a fixed ``returncode``."""
+    return LaunchctlClient(
+        path=path,
+        runner=lambda args, *, check: subprocess.CompletedProcess(args, returncode),
+    )
 
 
 def test_launchd_service_to_plist_dict():
@@ -19,7 +28,7 @@ def test_launchd_service_to_plist_dict():
         plist_path="/dev/null",  # stub
         log_name="testsvc",
         log_dir=Path("/tmp"),  # noqa: S108
-        launchctl_path=DEFAULT_LAUNCHCTL,
+        launchctl=make_client(),
     )
     plist = svc.to_plist_dict()
     assert plist["Label"] == "com.test.service"
@@ -30,10 +39,10 @@ def test_launchd_service_to_plist_dict():
 
 def test_launchctl_resolution_failure(monkeypatch):
     monkeypatch.setattr(
-        "onginred.service.LaunchdService._resolve_launchctl",
-        lambda self: (_ for _ in ()).throw(LaunchdServiceError("`launchctl` binary cannot be found.")),
+        "onginred.launchctl.LaunchctlClient._resolve_launchctl",
+        lambda self: (_ for _ in ()).throw(LaunchctlError("`launchctl` binary cannot be found.")),
     )
-    with pytest.raises(LaunchdServiceError):
+    with pytest.raises(LaunchctlError):
         LaunchdService(
             bundle_identifier="com.test.missing",
             command=["echo"],
@@ -51,19 +60,13 @@ def test_launchd_service_install_uninstall(fs, monkeypatch):
     fs.create_file(str(fake_launchctl), contents="#!/bin/sh\necho mocked\n")
     fake_launchctl.chmod(0o755)
 
-    monkeypatch.setattr("shutil.which", lambda _: str(fake_launchctl))
-    monkeypatch.setattr(
-        "onginred.service.LaunchdService._resolve_launchctl",
-        lambda self: fake_launchctl,
-    )
-
+    client = make_client(path=fake_launchctl)
     svc = LaunchdService(
         bundle_identifier="com.test.installer",
         command=["echo", "foo"],
         schedule=schedule,
         plist_path=plist_path,
-        launchctl_path=fake_launchctl,
-        runner=lambda *a, **kw: subprocess.CompletedProcess(a[0], 0),
+        launchctl=client,
     )
 
     svc.install()
@@ -85,7 +88,7 @@ def test_missing_program_arguments_raises():
             bundle_identifier="com.test.invalid",
             command=[],
             schedule=sched,
-            launchctl_path=DEFAULT_LAUNCHCTL,
+            launchctl=make_client(),
         )
 
 
@@ -97,7 +100,7 @@ def test_program_takes_precedence(monkeypatch):
         command=["/usr/bin/env", "foo"],
         schedule=sched,
         plist_path="/dev/null",
-        launchctl_path=DEFAULT_LAUNCHCTL,
+        launchctl=make_client(),
     )
     plist = svc.to_plist_dict()
     assert plist["ProgramArguments"] == ["/usr/bin/env", "foo"]
@@ -111,7 +114,7 @@ def test_plist_path_matches_label(tmp_path):
         ["echo"],
         LaunchdSchedule(),
         plist_path=None,
-        launchctl_path=DEFAULT_LAUNCHCTL,
+        launchctl=make_client(),
     )
     assert svc.plist_path.name == f"{label}.plist"
 
@@ -122,7 +125,7 @@ def test_umask_and_user_fields(monkeypatch):
         ["echo"],
         LaunchdSchedule(),
         plist_path="/dev/null",
-        launchctl_path=DEFAULT_LAUNCHCTL,
+        launchctl=make_client(),
     )
     plist = svc.to_plist_dict()
     plist["UserName"] = "nobody"
@@ -138,8 +141,7 @@ def test_launchctl_failure(tmp_path):
         ["echo"],
         LaunchdSchedule(),
         plist_path=plist_path,
-        launchctl_path=Path("/bin/false"),
-        runner=lambda *a, **kw: subprocess.CompletedProcess(a[0], 1),
+        launchctl=make_client(returncode=1, path=Path("/bin/false")),
     )
     with pytest.raises(subprocess.CalledProcessError):
         svc.install()
@@ -152,8 +154,7 @@ def test_plist_round_trip_serialization(tmp_path):
         ["echo", "hi"],
         LaunchdSchedule(),
         plist_path=plist_path,
-        runner=lambda *a, **kw: subprocess.CompletedProcess(a[0], 0),
-        launchctl_path=DEFAULT_LAUNCHCTL,
+        launchctl=make_client(),
     )
     svc.install()
 
@@ -171,8 +172,7 @@ def test_plist_lint_passes(tmp_path):
         ["echo", "lint"],
         LaunchdSchedule(),
         plist_path=plist_path,
-        runner=lambda *a, **kw: subprocess.CompletedProcess(a[0], 0),
-        launchctl_path=DEFAULT_LAUNCHCTL,
+        launchctl=make_client(),
     )
     svc.install()
     with plist_path.open("rb") as f:
@@ -186,7 +186,7 @@ def test_program_precedence_empty_arguments():
         LaunchdSchedule(),
         plist_path="/dev/null",
         program="/bin/echo",
-        launchctl_path=DEFAULT_LAUNCHCTL,
+        launchctl=make_client(),
     )
     plist = svc.to_plist_dict()
     assert plist["Program"] == "/bin/echo"
@@ -200,7 +200,7 @@ def test_program_precedence_relative_arguments():
         LaunchdSchedule(),
         plist_path="/dev/null",
         program="/bin/echo",
-        launchctl_path=DEFAULT_LAUNCHCTL,
+        launchctl=make_client(),
     )
     plist = svc.to_plist_dict()
     assert plist["Program"] == "/bin/echo"
@@ -215,7 +215,7 @@ def test_log_paths_with_log_dir_and_name(tmp_path):
         log_dir=tmp_path,
         log_name="svc",
         create_dir=True,
-        launchctl_path=DEFAULT_LAUNCHCTL,
+        launchctl=make_client(),
     )
     assert svc.stdout_log.name == "svc.out"
     assert svc.stderr_log.name == "svc.err"
@@ -230,7 +230,7 @@ def test_log_paths_with_explicit_stdout_log(tmp_path):
         command=["echo"],
         schedule=LaunchdSchedule(),
         stdout_log=out_path,
-        launchctl_path=DEFAULT_LAUNCHCTL,
+        launchctl=make_client(),
     )
     assert svc.stdout_log == out_path
     assert svc.stderr_log == out_path  # fallback
@@ -243,8 +243,7 @@ def test_model_round_trip_serialization(tmp_path):
         ["echo", "foo"],
         LaunchdSchedule(),
         plist_path=path,
-        runner=lambda *a, **kw: subprocess.CompletedProcess(a[0], 0),
-        launchctl_path=DEFAULT_LAUNCHCTL,
+        launchctl=make_client(),
     )
     svc.install()
 
@@ -262,7 +261,7 @@ def test_program_field_is_ignored_in_dict_output():
         command=["/usr/bin/env", "foo"],
         schedule=LaunchdSchedule(),
         plist_path="/dev/null",
-        launchctl_path=DEFAULT_LAUNCHCTL,
+        launchctl=make_client(),
     )
     plist = svc.to_plist_dict()
     assert "Program" not in plist
@@ -279,8 +278,7 @@ def test_install_plist_write_failure(monkeypatch):
         ["echo", "fail"],
         LaunchdSchedule(),
         plist_path="/tmp/blocked.plist",  # noqa: S108
-        launchctl_path=Path("/bin/true"),
-        runner=lambda *a, **kw: subprocess.CompletedProcess(a[0], 0),
+        launchctl=make_client(path=Path("/bin/true")),
     )
     monkeypatch.setattr("pathlib.Path.open", fake_open)
     with pytest.raises(OSError, match="Permission denied"):
@@ -297,8 +295,7 @@ def test_invalid_plist_value_serialization(monkeypatch):
         ["echo"],
         BadSchedule(),
         plist_path="/tmp/faulty.plist",  # noqa: S108
-        launchctl_path=Path("/bin/true"),
-        runner=lambda *a, **kw: subprocess.CompletedProcess(a[0], 0),
+        launchctl=make_client(path=Path("/bin/true")),
     )
     with pytest.raises(TypeError):
         svc.install()
@@ -310,7 +307,7 @@ def test_identity_fields_in_plist_dict():
         ["echo"],
         LaunchdSchedule(),
         plist_path="/dev/null",
-        launchctl_path=DEFAULT_LAUNCHCTL,
+        launchctl=make_client(),
     )
     plist = svc.to_plist_dict()
     plist["UserName"] = "nobody"
