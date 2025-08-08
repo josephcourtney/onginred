@@ -7,6 +7,7 @@ from enum import StrEnum
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from onginred.cron import validate_range
+from onginred.utils import to_camel
 
 __all__ = [
     "SockFamily",
@@ -37,9 +38,9 @@ class SockProtocol(StrEnum):
 class SocketConfig(BaseModel):
     """Model encapsulating socket-related launchd keys."""
 
-    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+    model_config = ConfigDict(extra="forbid", populate_by_name=True, alias_generator=to_camel)
 
-    sock_type: SockType | None = Field(default=None, alias="SockType", strict=True)
+    sock_type: SockType | None = Field(default=None, strict=True)
     passive: bool | None = Field(default=None, alias="SockPassive")
     node_name: str | None = Field(default=None, alias="SockNodeName")
     service_name: str | int | None = Field(default=None, alias="SockServiceName")
@@ -50,8 +51,8 @@ class SocketConfig(BaseModel):
     path_owner: int | None = Field(default=None, alias="SockPathOwner")
     path_group: int | None = Field(default=None, alias="SockPathGroup")
     path_mode: int | None = Field(default=None, alias="SockPathMode")
-    bonjour: bool | str | list[str] | None = Field(default=None, alias="Bonjour")
-    multicast_group: str | None = Field(default=None, alias="MulticastGroup")
+    bonjour: bool | str | list[str] | None = None
+    multicast_group: str | None = None
 
     @field_validator("path_mode")
     @classmethod

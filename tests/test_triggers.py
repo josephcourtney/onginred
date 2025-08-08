@@ -1,6 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
+from onginred.errors import InvalidTimeRangeError
 from onginred.triggers import FilesystemTriggers, TimeTriggers
 
 
@@ -56,7 +57,7 @@ def test_invalid_cron_expression_rejected():
 
 def test_invalid_time_range_specifier():
     t = TimeTriggers()
-    with pytest.raises(ValueError, match=r"."):
+    with pytest.raises(InvalidTimeRangeError, match=r"."):
         t.add_suppression_window("25:00-26:00")
 
 

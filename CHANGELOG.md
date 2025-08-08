@@ -1,3 +1,14 @@
+## [0.0.6] - 2025-08-08
+
+### Added
+- add alias generator to simplify model field aliases
+- add typed dicts for `to_plist_dict` return types
+- add atomic plist write helper for safer file writes
+- add JSON configuration loader for schedules
+
+### Changed
+- replace generic exceptions with descriptive subclasses
+
 ## [0.0.5] - 2025-08-08
 
 ### Added
