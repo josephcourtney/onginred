@@ -1,6 +1,7 @@
 import plistlib
 import subprocess
 from pathlib import Path
+from typing import cast
 
 from onginred.behavior import LaunchBehavior
 from onginred.launchctl import LaunchctlClient
@@ -62,12 +63,15 @@ def test_program_field_precedence_over_programarguments():
 # Environment, Identity, and Permissions
 def test_environment_variables_included():
     LaunchBehavior()
-    plist = LaunchdService(
-        "com.example.env",
-        ["echo"],
-        LaunchdSchedule(),
-        plist_path="/dev/null",
-        launchctl=make_client(),
-    ).to_plist_dict()
+    plist = cast(
+        "dict",
+        LaunchdService(
+            "com.example.env",
+            ["echo"],
+            LaunchdSchedule(),
+            plist_path="/dev/null",
+            launchctl=make_client(),
+        ).to_plist_dict(),
+    )
     plist["EnvironmentVariables"] = {"FOO": "bar"}
     assert plist["EnvironmentVariables"]["FOO"] == "bar"

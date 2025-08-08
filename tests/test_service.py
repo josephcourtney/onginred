@@ -1,6 +1,7 @@
 import plistlib
 import subprocess
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -30,7 +31,7 @@ def test_launchd_service_to_plist_dict():
         log_dir=Path("/tmp"),  # noqa: S108
         launchctl=make_client(),
     )
-    plist = svc.to_plist_dict()
+    plist = cast("dict", svc.to_plist_dict())
     assert plist["Label"] == "com.test.service"
     assert plist["ProgramArguments"] == ["/usr/bin/env", "echo", "hello"]
     assert "StandardOutPath" in plist
@@ -102,7 +103,7 @@ def test_program_takes_precedence(monkeypatch):
         plist_path="/dev/null",
         launchctl=make_client(),
     )
-    plist = svc.to_plist_dict()
+    plist = cast("dict", svc.to_plist_dict())
     assert plist["ProgramArguments"] == ["/usr/bin/env", "foo"]
 
 
@@ -127,7 +128,7 @@ def test_umask_and_user_fields(monkeypatch):
         plist_path="/dev/null",
         launchctl=make_client(),
     )
-    plist = svc.to_plist_dict()
+    plist = cast("dict", svc.to_plist_dict())
     plist["UserName"] = "nobody"
     plist["Umask"] = "022"
     assert plist["UserName"] == "nobody"
@@ -188,7 +189,7 @@ def test_program_precedence_empty_arguments():
         program="/bin/echo",
         launchctl=make_client(),
     )
-    plist = svc.to_plist_dict()
+    plist = cast("dict", svc.to_plist_dict())
     assert plist["Program"] == "/bin/echo"
     assert "ProgramArguments" not in plist
 
@@ -269,7 +270,7 @@ def test_program_field_is_ignored_in_dict_output():
 
 
 def test_install_plist_write_failure(monkeypatch):
-    def fake_open(*args, **kwargs):
+    def fake_atomic(*args, **kwargs):
         msg = "Permission denied"
         raise OSError(msg)
 
@@ -280,7 +281,7 @@ def test_install_plist_write_failure(monkeypatch):
         plist_path="/tmp/blocked.plist",  # noqa: S108
         launchctl=make_client(path=Path("/bin/true")),
     )
-    monkeypatch.setattr("pathlib.Path.open", fake_open)
+    monkeypatch.setattr("onginred.service.atomic_write", fake_atomic)
     with pytest.raises(OSError, match="Permission denied"):
         svc.install()
 
@@ -309,7 +310,7 @@ def test_identity_fields_in_plist_dict():
         plist_path="/dev/null",
         launchctl=make_client(),
     )
-    plist = svc.to_plist_dict()
+    plist = cast("dict", svc.to_plist_dict())
     plist["UserName"] = "nobody"
     plist["GroupName"] = "staff"
     plist["InitGroups"] = True

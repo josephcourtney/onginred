@@ -6,16 +6,27 @@ import logging
 import plistlib
 import subprocess  # noqa: S404
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from onginred.config import DEFAULT_INSTALL_LOCATION, DEFAULT_LOG_LOCATION
-from onginred.file_io import ensure_path
+from onginred.file_io import atomic_write, ensure_path
 from onginred.launchctl import LaunchctlClient
+from onginred.schedule import LaunchdSchedule, ScheduleDict
+
+
+class ServicePlist(ScheduleDict, total=False):
+    """Typed dictionary for serialized service plist output."""
+
+    Label: str
+    StandardOutPath: str
+    StandardErrorPath: str
+    Program: str
+    ProgramArguments: list[str]
+    # schedule fields are inherited via ScheduleDict when used for typing
+
 
 if TYPE_CHECKING:  # pragma: no cover - type checking only
     from collections.abc import Sequence
-
-    from onginred.schedule import LaunchdSchedule
 
 __all__ = ["LaunchdService", "LaunchdServiceError"]
 
@@ -89,29 +100,32 @@ class LaunchdService:
             ensure_path(self.stdout_log)
             ensure_path(self.stderr_log)
 
-    def install(self) -> None:
-        """Serialize the plist and load it via ``launchctl``."""
-        plist = self.to_plist_dict()
-        logger.info("serializing plist", extra={"path": str(self.plist_path)})
-        with self.plist_path.open("wb") as f:
-            plistlib.dump(plist, f)
-        res = self.launchctl.load(self.plist_path)
-        if res.returncode != 0:
-            raise subprocess.CalledProcessError(res.returncode, res.args)
-
     def uninstall(self) -> None:
         """Unload the plist and remove the file."""
         self.launchctl.unload(self.plist_path)
         logger.info("removing plist", extra={"path": str(self.plist_path)})
         self.plist_path.unlink(missing_ok=True)
 
-    def to_plist_dict(self) -> dict:
-        plist = {
-            "Label": self.bundle_identifier,
-            "StandardOutPath": str(self.stdout_log),
-            "StandardErrorPath": str(self.stderr_log),
-            **self.schedule.to_plist_dict(),
-        }
+    def install(self) -> None:
+        """Serialize the plist and load it via ``launchctl``."""
+        plist = self.to_plist_dict()
+        logger.info("serializing plist", extra={"path": str(self.plist_path)})
+        with atomic_write(self.plist_path) as f:
+            plistlib.dump(plist, f)
+        res = self.launchctl.load(self.plist_path)
+        if res.returncode != 0:
+            raise subprocess.CalledProcessError(res.returncode, res.args)
+
+    def to_plist_dict(self) -> ServicePlist:
+        plist = cast(
+            "ServicePlist",
+            {
+                "Label": self.bundle_identifier,
+                "StandardOutPath": str(self.stdout_log),
+                "StandardErrorPath": str(self.stderr_log),
+                **self.schedule.to_plist_dict(),  # type: ignore[arg-type]
+            },
+        )
         if self.program:
             plist["Program"] = self.program
             if self.command:
