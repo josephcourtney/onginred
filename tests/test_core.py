@@ -7,20 +7,14 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from onginred.core import (
-    EventTriggers,
-    FilesystemTriggers,
-    LaunchBehavior,
-    LaunchdSchedule,
-    LaunchdService,
-    LaunchdServiceError,
-    SockFamily,
-    SockProtocol,
-    SockType,
-    TimeTriggers,
-    _parse_cron_field,
-    validate_range,
-)
+from onginred.behavior import KeepAliveConfig, LaunchBehavior
+from onginred.core import EventTriggers, LaunchdSchedule
+from onginred.cron import expand, validate_range
+from onginred.service import LaunchdService, LaunchdServiceError
+from onginred.sockets import SockFamily, SockProtocol, SockType
+from onginred.triggers import FilesystemTriggers, TimeTriggers
+
+DEFAULT_LAUNCHCTL = Path("/bin/true")
 
 # --- TimeTriggers ---
 
@@ -60,28 +54,40 @@ def test_time_triggers_default_plist():
     assert TimeTriggers().to_plist_dict() == {}
 
 
+def test_suppression_window_adds_hours_and_minutes():
+    t = TimeTriggers()
+    t.add_suppression_window("23:58-00:01")
+    entries = t.calendar_entries
+    assert {"Hour": 23, "Minute": 58} in entries
+    assert {"Hour": 0, "Minute": 1} in entries
+
+
 def test_validate_range_boundaries():
     validate_range("Minute", 0, 0, 59)
     validate_range("Minute", 59, 0, 59)
 
 
-def test_parse_cron_field_invalid_range():
-    with pytest.raises(ValueError, match=r"."):
-        _ = _parse_cron_field("0-100", 0, 59)
+@pytest.mark.parametrize(
+    ("expr", "first"),
+    [
+        ("1-3 0 * * *", [{"Minute": 1, "Hour": 0}, {"Minute": 2, "Hour": 0}, {"Minute": 3, "Hour": 0}]),
+        ("*/30 1 * * *", [{"Minute": 0, "Hour": 1}, {"Minute": 30, "Hour": 1}]),
+    ],
+)
+def test_cron_expand(expr, first):
+    entries = expand(expr)
+    assert entries[: len(first)] == first
 
 
-def test_parse_cron_field_invalid_step():
+@pytest.mark.parametrize("expr", ["0-100 0 * * *", "*/0 0 * * *"])
+def test_cron_expand_invalid(expr):
     with pytest.raises(ValueError, match=r"."):
-        _ = _parse_cron_field("*/0", 0, 59)
+        expand(expr)
 
 
 def test_validate_range_error():
     with pytest.raises(ValueError, match=r"."):
         validate_range("Minute", 60, 0, 59)
-
-
-def test_parse_cron_field_range():
-    assert _parse_cron_field("1-3", 0, 59) == [1, 2, 3]
 
 
 # --- FilesystemTriggers ---
@@ -155,6 +161,19 @@ def test_launch_behavior_keep_alive_dict():
     assert d["KeepAlive"]["Crashed"] is True
 
 
+def test_keep_alive_config_as_plist_matrix():
+    assert KeepAliveConfig(keep_alive=True).as_plist() is True
+    assert KeepAliveConfig(keep_alive={"SuccessfulExit": False}).as_plist() == {"SuccessfulExit": False}
+    assert (
+        KeepAliveConfig(
+            keep_alive=True,
+            path_state={"/tmp": True},  # noqa: S108
+        ).as_plist()
+        == {"PathState": {"/tmp": True}}  # noqa: S108
+    )
+    assert KeepAliveConfig().as_plist() is None
+
+
 def test_launch_behavior_negative_exit_timeout():
     lb = LaunchBehavior()
     with pytest.raises(ValidationError):
@@ -199,6 +218,7 @@ def test_launchd_service_to_plist_dict():
         plist_path="/dev/null",  # stub
         log_name="testsvc",
         log_dir=Path("/tmp"),  # noqa: S108
+        launchctl_path=DEFAULT_LAUNCHCTL,
     )
     plist = svc.to_plist_dict()
     assert plist["Label"] == "com.test.service"
@@ -209,7 +229,7 @@ def test_launchd_service_to_plist_dict():
 
 def test_launchctl_resolution_failure(monkeypatch):
     monkeypatch.setattr(
-        "onginred.core.LaunchdService._resolve_launchctl",
+        "onginred.service.LaunchdService._resolve_launchctl",
         lambda self: (_ for _ in ()).throw(LaunchdServiceError("`launchctl` binary cannot be found.")),
     )
     with pytest.raises(LaunchdServiceError):
@@ -232,14 +252,8 @@ def test_launchd_service_install_uninstall(fs, monkeypatch):
 
     monkeypatch.setattr("shutil.which", lambda _: str(fake_launchctl))
     monkeypatch.setattr(
-        "onginred.core.LaunchdService._resolve_launchctl",
+        "onginred.service.LaunchdService._resolve_launchctl",
         lambda self: fake_launchctl,
-    )
-    import subprocess as _sub
-
-    monkeypatch.setattr(
-        "onginred.core.subprocess.run",
-        lambda *args, **kwargs: _sub.CompletedProcess(args, 0),
     )
 
     svc = LaunchdService(
@@ -248,6 +262,7 @@ def test_launchd_service_install_uninstall(fs, monkeypatch):
         schedule=schedule,
         plist_path=plist_path,
         launchctl_path=fake_launchctl,
+        runner=lambda *a, **kw: subprocess.CompletedProcess(a[0], 0),
     )
 
     svc.install()
@@ -265,7 +280,12 @@ def test_launchd_service_install_uninstall(fs, monkeypatch):
 def test_missing_program_arguments_raises():
     sched = LaunchdSchedule()
     with pytest.raises(TypeError):  # or custom validation if added
-        LaunchdService(bundle_identifier="com.test.invalid", command=[], schedule=sched)
+        LaunchdService(
+            bundle_identifier="com.test.invalid",
+            command=[],
+            schedule=sched,
+            launchctl_path=DEFAULT_LAUNCHCTL,
+        )
 
 
 # If Both `Program` and `ProgramArguments`, `Program` Wins
@@ -276,6 +296,7 @@ def test_program_takes_precedence(monkeypatch):
         command=["/usr/bin/env", "foo"],
         schedule=sched,
         plist_path="/dev/null",
+        launchctl_path=DEFAULT_LAUNCHCTL,
     )
     plist = svc.to_plist_dict()
     assert plist["ProgramArguments"] == ["/usr/bin/env", "foo"]
@@ -284,7 +305,13 @@ def test_program_takes_precedence(monkeypatch):
 # `.plist` filename matches label
 def test_plist_path_matches_label(tmp_path):
     label = "com.example.myjob"
-    svc = LaunchdService(label, ["echo"], LaunchdSchedule(), plist_path=None)
+    svc = LaunchdService(
+        label,
+        ["echo"],
+        LaunchdSchedule(),
+        plist_path=None,
+        launchctl_path=DEFAULT_LAUNCHCTL,
+    )
     assert svc.plist_path.name == f"{label}.plist"
 
 
@@ -305,11 +332,12 @@ def test_generated_plist_is_valid(tmp_path):
         ["echo", "hello"],
         LaunchdSchedule(),
         plist_path=plist_path,
+        runner=lambda *a, **kw: subprocess.CompletedProcess(a[0], 0),
+        launchctl_path=DEFAULT_LAUNCHCTL,
     )
     svc.install()
-    result = subprocess.run(["plutil", "-lint", str(plist_path)], check=False, capture_output=True, text=True)  # noqa: S607
-    assert result.returncode == 0
-    assert "OK" in result.stdout
+    with plist_path.open("rb") as f:
+        plistlib.load(f)
 
 
 # `RunAtLoad` Starts Job Immediately
@@ -420,6 +448,7 @@ def test_environment_variables_included():
         ["echo"],
         LaunchdSchedule(),
         plist_path="/dev/null",
+        launchctl_path=DEFAULT_LAUNCHCTL,
     ).to_plist_dict()
     plist["EnvironmentVariables"] = {"FOO": "bar"}
     assert plist["EnvironmentVariables"]["FOO"] == "bar"
@@ -431,6 +460,7 @@ def test_umask_and_user_fields(monkeypatch):
         ["echo"],
         LaunchdSchedule(),
         plist_path="/dev/null",
+        launchctl_path=DEFAULT_LAUNCHCTL,
     )
     plist = svc.to_plist_dict()
     plist["UserName"] = "nobody"
@@ -471,19 +501,15 @@ def test_invalid_time_range_specifier():
         t.add_suppression_window("25:00-26:00")
 
 
-def test_launchctl_failure(monkeypatch):
-    import subprocess as _sub
-
-    monkeypatch.setattr(
-        "onginred.core.subprocess.run",
-        lambda *args, **kwargs: _sub.CompletedProcess(args, 1),
-    )
+def test_launchctl_failure(tmp_path):
+    plist_path = tmp_path / "fail.plist"
     svc = LaunchdService(
         "com.example.fail",
         ["echo"],
         LaunchdSchedule(),
-        plist_path="/tmp/fail.plist",  # noqa: S108
+        plist_path=plist_path,
         launchctl_path=Path("/bin/false"),
+        runner=lambda *a, **kw: subprocess.CompletedProcess(a[0], 1),
     )
     with pytest.raises(subprocess.CalledProcessError):
         svc.install()
@@ -516,6 +542,8 @@ def test_plist_round_trip_serialization(tmp_path):
         ["echo", "hi"],
         LaunchdSchedule(),
         plist_path=plist_path,
+        runner=lambda *a, **kw: subprocess.CompletedProcess(a[0], 0),
+        launchctl_path=DEFAULT_LAUNCHCTL,
     )
     svc.install()
 
@@ -533,11 +561,12 @@ def test_plist_lint_passes(tmp_path):
         ["echo", "lint"],
         LaunchdSchedule(),
         plist_path=plist_path,
+        runner=lambda *a, **kw: subprocess.CompletedProcess(a[0], 0),
+        launchctl_path=DEFAULT_LAUNCHCTL,
     )
     svc.install()
-    result = subprocess.run(["plutil", "-lint", str(plist_path)], check=False, capture_output=True, text=True)  # noqa: S607
-    assert result.returncode == 0
-    assert "OK" in result.stdout
+    with plist_path.open("rb") as f:
+        plistlib.load(f)
 
 
 # Program vs ProgramArguments Precedence
@@ -548,6 +577,7 @@ def test_program_field_precedence_over_programarguments():
         LaunchdSchedule(),
         plist_path="/dev/null",
         program="/bin/echo",
+        launchctl_path=DEFAULT_LAUNCHCTL,
     )
     plist = svc.to_plist_dict()
     assert plist["Program"] == "/bin/echo"
@@ -562,6 +592,7 @@ def test_program_precedence_empty_arguments():
         LaunchdSchedule(),
         plist_path="/dev/null",
         program="/bin/echo",
+        launchctl_path=DEFAULT_LAUNCHCTL,
     )
     plist = svc.to_plist_dict()
     assert plist["Program"] == "/bin/echo"
@@ -575,6 +606,7 @@ def test_program_precedence_relative_arguments():
         LaunchdSchedule(),
         plist_path="/dev/null",
         program="/bin/echo",
+        launchctl_path=DEFAULT_LAUNCHCTL,
     )
     plist = svc.to_plist_dict()
     assert plist["Program"] == "/bin/echo"
@@ -605,6 +637,7 @@ def test_log_paths_with_log_dir_and_name(tmp_path):
         log_dir=tmp_path,
         log_name="svc",
         create_dir=True,
+        launchctl_path=DEFAULT_LAUNCHCTL,
     )
     assert svc.stdout_log.name == "svc.out"
     assert svc.stderr_log.name == "svc.err"
@@ -619,6 +652,7 @@ def test_log_paths_with_explicit_stdout_log(tmp_path):
         command=["echo"],
         schedule=LaunchdSchedule(),
         stdout_log=out_path,
+        launchctl_path=DEFAULT_LAUNCHCTL,
     )
     assert svc.stdout_log == out_path
     assert svc.stderr_log == out_path  # fallback
@@ -631,6 +665,8 @@ def test_model_round_trip_serialization(tmp_path):
         ["echo", "foo"],
         LaunchdSchedule(),
         plist_path=path,
+        runner=lambda *a, **kw: subprocess.CompletedProcess(a[0], 0),
+        launchctl_path=DEFAULT_LAUNCHCTL,
     )
     svc.install()
 
@@ -663,6 +699,7 @@ def test_program_field_is_ignored_in_dict_output():
         command=["/usr/bin/env", "foo"],
         schedule=LaunchdSchedule(),
         plist_path="/dev/null",
+        launchctl_path=DEFAULT_LAUNCHCTL,
     )
     plist = svc.to_plist_dict()
     assert "Program" not in plist
@@ -680,6 +717,7 @@ def test_install_plist_write_failure(monkeypatch):
         LaunchdSchedule(),
         plist_path="/tmp/blocked.plist",  # noqa: S108
         launchctl_path=Path("/bin/true"),
+        runner=lambda *a, **kw: subprocess.CompletedProcess(a[0], 0),
     )
     monkeypatch.setattr("pathlib.Path.open", fake_open)
     with pytest.raises(OSError, match="Permission denied"):
@@ -697,6 +735,7 @@ def test_invalid_plist_value_serialization(monkeypatch):
         BadSchedule(),
         plist_path="/tmp/faulty.plist",  # noqa: S108
         launchctl_path=Path("/bin/true"),
+        runner=lambda *a, **kw: subprocess.CompletedProcess(a[0], 0),
     )
     with pytest.raises(TypeError):
         svc.install()
@@ -730,6 +769,7 @@ def test_identity_fields_in_plist_dict():
         ["echo"],
         LaunchdSchedule(),
         plist_path="/dev/null",
+        launchctl_path=DEFAULT_LAUNCHCTL,
     )
     plist = svc.to_plist_dict()
     plist["UserName"] = "nobody"
