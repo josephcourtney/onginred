@@ -54,6 +54,7 @@ class LaunchdSchedule(BaseModel):
         self.behavior.throttle_interval = seconds
 
     def to_plist_dict(self) -> dict[str, Any]:
+        """Combine subcomponent plist fragments into a single dictionary."""
         out: dict[str, Any] = {}
         out.update(self.time.to_plist_dict())
         out.update(self.fs.to_plist_dict())
