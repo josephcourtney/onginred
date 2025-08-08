@@ -1,7 +1,7 @@
 # =================================== project ====================================
 [project]
   name = "onginred"
-  version = "0.0.6"
+  version = "0.1.0"
   description = "manager for macos launchd services"
   readme = "README.md"
   authors = [
@@ -21,8 +21,8 @@
     "pydantic>=2.11.7",
 ]
 
-  # [project.scripts]
-  #   onginred = "onginred.cli:main" # may be added later
+  [project.scripts]
+    onginred = "onginred.cli:main"
 
 [dependency-groups]
   dev = [
@@ -34,7 +34,8 @@
     "pytest-randomly>=3.16.0",
     "freezegun>=1.5.1",
     "pyfakefs>=5.9.2",
-  ]
+    "hypothesis>=6.137.1",
+]
 
 # =================================== build ====================================
 [build-system]

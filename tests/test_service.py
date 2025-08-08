@@ -1,3 +1,4 @@
+import asyncio
 import plistlib
 import subprocess
 from pathlib import Path
@@ -317,3 +318,30 @@ def test_identity_fields_in_plist_dict():
     assert plist["UserName"] == "nobody"
     assert plist["GroupName"] == "staff"
     assert plist["InitGroups"] is True
+
+
+def test_async_install_uninstall(monkeypatch, tmp_path):
+    svc = LaunchdService(
+        "com.example.async",
+        ["echo"],
+        LaunchdSchedule(),
+        plist_path=tmp_path / "async.plist",
+        launchctl=make_client(),
+    )
+
+    called: dict[str, bool] = {"install": False, "uninstall": False}
+
+    def fake_install() -> None:
+        called["install"] = True
+
+    def fake_uninstall() -> None:
+        called["uninstall"] = True
+
+    monkeypatch.setattr(svc, "install", fake_install)
+    monkeypatch.setattr(svc, "uninstall", fake_uninstall)
+
+    asyncio.run(svc.install_async())
+    asyncio.run(svc.uninstall_async())
+
+    assert called["install"] is True
+    assert called["uninstall"] is True

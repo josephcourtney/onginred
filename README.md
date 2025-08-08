@@ -16,3 +16,16 @@
 * **Export to valid `launchd.plist` format** using `plistlib`.
 * **Installation and removal** of launch agents using `launchctl`.
 * **Support for advanced features** like suppression windows, cron expressions, socket configurations, and restart conditions.
+
+## Quick start
+
+```python
+from onginred.schedule import LaunchdSchedule
+from onginred.service import LaunchdService
+
+sched = LaunchdSchedule()
+sched.add_cron("0 12 * * *")
+
+svc = LaunchdService("com.example.hello", ["echo", "hello"], sched)
+svc.install()
+```

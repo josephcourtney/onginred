@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import plistlib
 import subprocess  # noqa: S404
@@ -100,11 +101,19 @@ class LaunchdService:
             ensure_path(self.stdout_log)
             ensure_path(self.stderr_log)
 
+    def __repr__(self) -> str:
+        """Return a readable representation including label and command."""
+        cmd = " ".join(self.command) if self.command else self.program
+        return f"LaunchdService(label={self.bundle_identifier!r}, cmd={cmd!r})"
+
     def uninstall(self) -> None:
         """Unload the plist and remove the file."""
         self.launchctl.unload(self.plist_path)
         logger.info("removing plist", extra={"path": str(self.plist_path)})
         self.plist_path.unlink(missing_ok=True)
+
+    async def uninstall_async(self) -> None:
+        await asyncio.to_thread(self.uninstall)
 
     def install(self) -> None:
         """Serialize the plist and load it via ``launchctl``."""
@@ -115,6 +124,9 @@ class LaunchdService:
         res = self.launchctl.load(self.plist_path)
         if res.returncode != 0:
             raise subprocess.CalledProcessError(res.returncode, res.args)
+
+    async def install_async(self) -> None:
+        await asyncio.to_thread(self.install)
 
     def to_plist_dict(self) -> ServicePlist:
         plist = cast(

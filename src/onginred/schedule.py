@@ -47,6 +47,20 @@ class LaunchdSchedule(BaseModel):
     events: EventTriggers = Field(default_factory=EventTriggers)
     behavior: LaunchBehavior = Field(default_factory=LaunchBehavior)
 
+    def __repr__(self) -> str:
+        """Return a concise representation highlighting configured components."""
+        parts = []
+        if self.time.calendar_entries:
+            parts.append(f"time={len(self.time.calendar_entries)} entries")
+        if self.fs.watch_paths or self.fs.queue_directories:
+            parts.append(f"fs=watch:{len(self.fs.watch_paths)} queue:{len(self.fs.queue_directories)}")
+        if self.events.launch_events or self.events.sockets or self.events.mach_services:
+            parts.append("events=True")
+        if self.behavior.keep_alive:
+            parts.append("keep_alive=True")
+        joined = ", ".join(parts)
+        return f"LaunchdSchedule({joined})"
+
     def add_cron(self, expr: str) -> None:
         self.time.add_cron(expr)
 
