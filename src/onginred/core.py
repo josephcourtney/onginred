@@ -11,7 +11,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 
 from croniter import croniter
-from jkit.file_io import ensure_path
+
+from onginred.file_io import ensure_path
 
 _MISSING = object()
 
