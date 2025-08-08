@@ -98,6 +98,13 @@ def fake_run(cmd, *args, **kwargs):
 
 
 @pytest.fixture(autouse=True)
-def fake_launchctl(monkeypatch):
+def fake_launchctl(monkeypatch, tmp_path):
     """Stub out subprocess.run globally to simulate launchctl and plutil."""
     monkeypatch.setattr(subprocess, "run", fake_run)
+    fake_launchctl_path = tmp_path / "launchctl"
+    fake_launchctl_path.write_text("#!/bin/sh\nexit 0\n")
+    fake_launchctl_path.chmod(0o755)
+    monkeypatch.setattr(
+        "onginred.core.LaunchdService._resolve_launchctl",
+        lambda self: fake_launchctl_path,
+    )
