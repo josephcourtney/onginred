@@ -1,6 +1,9 @@
+from typing import cast
+
 import pytest
 from pydantic import ValidationError
 
+from onginred.errors import InvalidSocketKeyError
 from onginred.sockets import SockFamily, SockProtocol, SockType
 from onginred.triggers import EventTriggers
 
@@ -12,7 +15,8 @@ def test_event_triggers_socket_and_mach():
     d = e.to_plist_dict()
     assert "Sockets" in d
     assert "mysock" in d["Sockets"]
-    assert d["MachServices"]["com.example.svc"]["ResetAtClose"] is True
+    mach = cast("dict", d["MachServices"])
+    assert mach["com.example.svc"]["ResetAtClose"] is True
 
 
 # Socket Configuration Tests
@@ -62,7 +66,7 @@ def test_invalid_socket_key_rejected():
     e = EventTriggers()
     # Improper manual dict insertion simulating malformed user input
     e.sockets["bad_socket"] = {"InvalidKey": "value"}
-    with pytest.raises(KeyError):
+    with pytest.raises(InvalidSocketKeyError):
         _ = e.to_plist_dict()
 
 
@@ -77,5 +81,5 @@ def test_socket_invalid_enum_values(invalid_type):
 def test_socket_config_manual_invalid_key():
     e = EventTriggers()
     e.sockets["bad"] = {"InvalidSockKey": True}
-    with pytest.raises(KeyError):
+    with pytest.raises(InvalidSocketKeyError):
         _ = e.to_plist_dict()

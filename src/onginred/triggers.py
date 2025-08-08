@@ -3,21 +3,33 @@
 from __future__ import annotations
 
 from datetime import time
-from typing import Any, Final
+from typing import Any, Final, TypedDict
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from onginred import cron
+from onginred.errors import (
+    DescriptorTypeError,
+    InvalidSocketKeyError,
+    InvalidTimeRangeError,
+)
 from onginred.sockets import SocketConfig, SockFamily, SockProtocol, SockType
+from onginred.utils import to_camel
 
 __all__ = ["FilesystemTriggers", "TimeTriggers"]
 
 
 class TimeTriggers(BaseModel):
-    model_config = ConfigDict(validate_assignment=True, populate_by_name=True)
+    model_config = ConfigDict(validate_assignment=True, populate_by_name=True, alias_generator=to_camel)
 
     calendar_entries: list[dict[str, int]] = Field(default_factory=list, alias="StartCalendarInterval")
-    start_interval: int | None = Field(None, alias="StartInterval", gt=0)
+    start_interval: int | None = Field(None, gt=0)
+
+    class TimePlist(TypedDict, total=False):
+        """Typed dictionary for serialized time trigger output."""
+
+        StartCalendarInterval: list[dict[str, int]]
+        StartInterval: int
 
     def add_calendar_entry(
         self,
@@ -65,7 +77,7 @@ class TimeTriggers(BaseModel):
             end = self._parse_time(end_s)
         except ValueError as e:
             msg = f"Invalid time range: {spec}"
-            raise ValueError(msg) from e
+            raise InvalidTimeRangeError(msg) from e
 
         for h, m in self._expand_range(start, end):
             self.add_calendar_entry(hour=h, minute=m)
@@ -73,11 +85,11 @@ class TimeTriggers(BaseModel):
     def set_start_interval(self, seconds: int) -> None:
         self.start_interval = seconds
 
-    def to_plist_dict(self) -> dict[str, Any]:
+    def to_plist_dict(self) -> TimePlist:
         data = self.model_dump(by_alias=True, exclude_none=True)
         if not data.get("StartCalendarInterval"):
             data.pop("StartCalendarInterval", None)
-        return data
+        return data  # type: ignore[return-value]
 
     @staticmethod
     def _parse_time(s: str) -> time:
@@ -104,11 +116,18 @@ class TimeTriggers(BaseModel):
 
 
 class FilesystemTriggers(BaseModel):
-    model_config = ConfigDict(validate_assignment=True, populate_by_name=True)
+    model_config = ConfigDict(validate_assignment=True, populate_by_name=True, alias_generator=to_camel)
 
-    watch_paths: set[str] = Field(default_factory=set, alias="WatchPaths")
-    queue_directories: set[str] = Field(default_factory=set, alias="QueueDirectories")
-    start_on_mount: bool = Field(default=False, alias="StartOnMount")
+    watch_paths: set[str] = Field(default_factory=set)
+    queue_directories: set[str] = Field(default_factory=set)
+    start_on_mount: bool = False
+
+    class FilesystemPlist(TypedDict, total=False):
+        """Typed dictionary for serialized filesystem trigger output."""
+
+        WatchPaths: list[str]
+        QueueDirectories: list[str]
+        StartOnMount: bool
 
     def add_watch_path(self, path: str) -> None:
         self.watch_paths.add(path)
@@ -119,26 +138,33 @@ class FilesystemTriggers(BaseModel):
     def enable_start_on_mount(self) -> None:
         self.start_on_mount = True
 
-    def to_plist_dict(self) -> dict[str, Any]:
+    def to_plist_dict(self) -> FilesystemPlist:
         plist = self.model_dump(by_alias=True, exclude_defaults=True, exclude_none=True)
         if "WatchPaths" in plist:
             plist["WatchPaths"] = sorted(plist["WatchPaths"])
         if "QueueDirectories" in plist:
             plist["QueueDirectories"] = sorted(plist["QueueDirectories"])
-        return plist
+        return plist  # type: ignore[return-value]
 
 
 class EventTriggers(BaseModel):
-    model_config = ConfigDict(validate_assignment=True, populate_by_name=True)
+    model_config = ConfigDict(validate_assignment=True, populate_by_name=True, alias_generator=to_camel)
 
-    launch_events: dict[str, dict[str, dict]] = Field(default_factory=dict, alias="LaunchEvents")
-    sockets: dict[str, dict] = Field(default_factory=dict, alias="Sockets")
-    mach_services: dict[str, bool | dict] = Field(default_factory=dict, alias="MachServices")
+    launch_events: dict[str, dict[str, dict]] = Field(default_factory=dict)
+    sockets: dict[str, dict] = Field(default_factory=dict)
+    mach_services: dict[str, bool | dict] = Field(default_factory=dict)
+
+    class EventPlist(TypedDict, total=False):
+        """Typed dictionary for serialized event trigger output."""
+
+        LaunchEvents: dict[str, dict[str, dict]]
+        Sockets: dict[str, dict]
+        MachServices: dict[str, bool | dict]
 
     def add_launch_event(self, subsystem: str, event_name: str, descriptor: dict) -> None:
         if not isinstance(descriptor, dict):
             msg = "descriptor must be a dict"
-            raise TypeError(msg)
+            raise DescriptorTypeError(msg)
         self.launch_events.setdefault(subsystem, {})[event_name] = descriptor
 
     def add_socket(
@@ -190,7 +216,7 @@ class EventTriggers(BaseModel):
             config["HideUntilCheckIn"] = True
         self.mach_services[name] = config or True
 
-    def to_plist_dict(self) -> dict[str, Any]:
+    def to_plist_dict(self) -> EventPlist:
         plist: dict[str, Any] = {}
         if self.launch_events:
             plist["LaunchEvents"] = self.launch_events
@@ -214,8 +240,8 @@ class EventTriggers(BaseModel):
                 invalid = set(config) - allowed
                 if invalid:
                     msg = f"Invalid socket keys: {invalid}"
-                    raise KeyError(msg)
+                    raise InvalidSocketKeyError(msg)
             plist["Sockets"] = self.sockets
         if self.mach_services:
             plist["MachServices"] = self.mach_services
-        return plist
+        return plist  # type: ignore[return-value]

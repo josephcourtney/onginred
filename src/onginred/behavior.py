@@ -2,17 +2,21 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TypedDict
 
 from pydantic import BaseModel, ConfigDict, Field
+
+from onginred.utils import to_camel
 
 __all__ = ["KeepAliveConfig", "LaunchBehavior"]
 
 
 class KeepAliveConfig(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, alias_generator=to_camel)
+
     keep_alive: bool | dict | None = None
     path_state: dict[str, bool] = Field(default_factory=dict)
-    other_jobs: dict[str, bool] = Field(default_factory=dict)
+    other_jobs: dict[str, bool] = Field(default_factory=dict, alias="OtherJobEnabled")
     crashed: bool | None = None
     successful_exit: bool | None = None
 
@@ -52,21 +56,32 @@ class KeepAliveConfig(BaseModel):
 
 
 class LaunchBehavior(BaseModel):
-    model_config = ConfigDict(validate_assignment=True, populate_by_name=True)
+    model_config = ConfigDict(validate_assignment=True, populate_by_name=True, alias_generator=to_camel)
 
-    run_at_load: bool | None = Field(None, alias="RunAtLoad")
-    enable_pressured_exit: bool | None = Field(None, alias="EnablePressuredExit")
-    enable_transactions: bool | None = Field(None, alias="EnableTransactions")
-    launch_only_once: bool | None = Field(None, alias="LaunchOnlyOnce")
-    exit_timeout: int | None = Field(None, alias="ExitTimeout", ge=0)
-    throttle_interval: int | None = Field(None, alias="ThrottleInterval", ge=0)
+    run_at_load: bool | None = None
+    enable_pressured_exit: bool | None = None
+    enable_transactions: bool | None = None
+    launch_only_once: bool | None = None
+    exit_timeout: int | None = Field(None, ge=0)
+    throttle_interval: int | None = Field(None, ge=0)
     keep_alive: bool | dict | None = None
     path_state: dict[str, bool] = Field(default_factory=dict)
     other_jobs: dict[str, bool] = Field(default_factory=dict)
     crashed: bool | None = None
     successful_exit: bool | None = None
 
-    def to_plist_dict(self) -> dict[str, Any]:
+    class BehaviorPlist(TypedDict, total=False):
+        """Typed dictionary returned from :meth:`to_plist_dict`."""
+
+        RunAtLoad: bool
+        EnablePressuredExit: bool
+        EnableTransactions: bool
+        LaunchOnlyOnce: bool
+        ExitTimeout: int
+        ThrottleInterval: int
+        KeepAlive: bool | dict
+
+    def to_plist_dict(self) -> BehaviorPlist:
         plist = self.model_dump(
             by_alias=True,
             exclude_none=True,
@@ -88,4 +103,4 @@ class LaunchBehavior(BaseModel):
         ka = kab.as_plist()
         if ka is not None:
             plist["KeepAlive"] = ka
-        return plist
+        return plist  # type: ignore[return-value]
