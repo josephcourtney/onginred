@@ -4,14 +4,14 @@
 - [x] Replace generic `ValueError` and `KeyError` in user-facing code with custom exception subclasses for clearer error handling.
 - [x] Provide context-manager wrappers around plist file writes to handle partial failures and automatic cleanup.
 - [x] Offer a `load_from_yaml` or `load_from_json` classmethod to let users declare jobs in config files instead of Python code.
-- [ ] Add a CLI entry point (`console_scripts`) for scaffolding new jobs and inspecting existing `.plist` definitions.
-- [ ] Enhance model reprs (`__repr__`) to display key config fields for easier debugging in REPL sessions.
-- [ ] Expose asynchronous versions of `install`/`uninstall` for integration with async applications.
-- [ ] Integrate Hypothesis‐based property tests for cron expansion, path resolution, and socket validation to catch edge cases.
-- [ ] Expand the README with minimal, copy-and-paste code snippets covering common use cases.
-- [ ] Define a `LaunchdBuilder` class that encapsulates a `LaunchdSchedule` instance.
-- [ ] Implement chainable methods on `LaunchdBuilder` such as `.cron(expr: str)`, `.at(hour: int, minute: int)`, `.watch(path: str)`, `.queue(path: str)`, and `.keep_alive()`.
-- [ ] Ensure each fluent method applies its change to the appropriate submodel (`TimeTriggers`, `FilesystemTriggers`, `EventTriggers`, `LaunchBehavior`).
-- [ ] Return `self` from every builder method to enable method chaining.
-- [ ] Add a `.build()` method that returns the fully configured `LaunchdSchedule`.
-- [ ] Write unit tests confirming that each fluent call mutates the internal schedule exactly as expected.
+- [x] Add a CLI entry point (`console_scripts`) for scaffolding new jobs and inspecting existing `.plist` definitions.
+- [x] Enhance model reprs (`__repr__`) to display key config fields for easier debugging in REPL sessions.
+- [x] Expose asynchronous versions of `install`/`uninstall` for integration with async applications.
+- [x] Integrate Hypothesis‐based property tests for cron expansion, path resolution, and socket validation to catch edge cases.
+- [x] Expand the README with minimal, copy-and-paste code snippets covering common use cases.
+- [x] Define a `LaunchdBuilder` class that encapsulates a `LaunchdSchedule` instance.
+- [x] Implement chainable methods on `LaunchdBuilder` such as `.cron(expr: str)`, `.at(hour: int, minute: int)`, `.watch(path: str)`, `.queue(path: str)`, and `.keep_alive()`.
+- [x] Ensure each fluent method applies its change to the appropriate submodel (`TimeTriggers`, `FilesystemTriggers`, `EventTriggers`, `LaunchBehavior`).
+- [x] Return `self` from every builder method to enable method chaining.
+- [x] Add a `.build()` method that returns the fully configured `LaunchdSchedule`.
+- [x] Write unit tests confirming that each fluent call mutates the internal schedule exactly as expected.
