@@ -1,3 +1,14 @@
+## [0.0.4] - 2025-08-08
+
+### Added
+- extract triggers, sockets, behavior and service modules
+- introduce cron helper and injectable subprocess runner
+- add keep-alive configuration tests
+
+### Changed
+- replace KeepAliveConfig.build with as_plist and update LaunchBehavior
+- refine suppression window expansion to return hour/minute pairs
+
 ## [0.0.3] - 2025-08-08
 
 ### Added

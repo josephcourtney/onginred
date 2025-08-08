@@ -1,7 +1,7 @@
 # =================================== project ====================================
 [project]
   name = "onginred"
-  version = "0.0.3"
+  version = "0.0.4"
   description = "manager for macos launchd services"
   readme = "README.md"
   authors = [

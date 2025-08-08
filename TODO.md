@@ -1,33 +1,33 @@
-- [ ]  Extract `triggers.py`
+- [x]  Extract `triggers.py`
   - Move `TimeTriggers` and `FilesystemTriggers` from `core.py`.
   - Add `__all__` to the new module.
   - Update all imports: `from onginred.core import TimeTriggers` → `from onginred.triggers import TimeTriggers`.
-- [ ]  Extract `sockets.py`:
+- [x]  Extract `sockets.py`:
   - New module containing `SockType`, `SockFamily`, `SockProtocol`, `SocketConfig`, `_parse_cron_field` (cron helper stays for now).
   - Update `EventTriggers.add_socket` import path.
   - Ensure `__init__.py` re-exports enums for external API stability.
-- [ ]  Extract `behavior.py`:
+- [x]  Extract `behavior.py`:
   - Move `KeepAliveConfig`, `LaunchBehavior`.
   - Implement the refactored `KeepAliveConfig.as_plist()` method (see §3).
   - Remove the old `build()` method entirely.
-- [ ]  Extract `service.py`:
+- [x]  Extract `service.py`:
   - Move `LaunchdService` out of `core.py`
-- [ ]  Replace `KeepAliveConfig.build` → `as_plist`:
+- [x]  Replace `KeepAliveConfig.build` → `as_plist`:
   - Implement new logic:  `def as_plist(self) -> bool dict | None: ...  # see design doc`
   - Unit-test matrix: plain `True`, dict merge, mixed sub-fields, all-empty → `None`. |
-- [ ]  Wire into `LaunchBehavior`:
+- [x]  Wire into `LaunchBehavior`:
   - Adjust `LaunchBehavior.to_plist_dict` to call `self._keep_alive.as_plist()`.
   - Ensure previous public behaviour is unchanged.
-- [ ]  Update tests:
+- [x]  Update tests:
   - Remove global monkey-patch in `tests/conftest.py`; instead pass `runner=lambda *a, kw: subprocess.CompletedProcess(a, 0)` where needed.
   - Ensure concurrency tests still work (no global state).
-- [ ]  Create `cron.py` helper:
+- [x]  Create `cron.py` helper:
   - Move `_parse_cron_field` + `validate_range` + `add_cron` inner loops.
   - `TimeTriggers.add_cron` becomes one-liner delegating to `cron.expand(expr)`.
   - Add parameterised pytest cases covering ranges, steps, errors.
-- [ ]  Review `_expand_range` semantics:
+- [x]  Review `_expand_range` semantics:
   - Decide if minute-only expansion is intended; if not, refactor to return `(hour, minute)` tuples and update suppression-window logic & tests.
-- [ ] On methods with many parameters, make less-common or optional parameters keyword-only
-- [ ] Introduce `runner` parameter to make running subprocesses injectable
+- [x] On methods with many parameters, make less-common or optional parameters keyword-only
+- [x] Introduce `runner` parameter to make running subprocesses injectable
   - In `LaunchdService.__init__` add `runner: Callable[..., subprocess.CompletedProcess] = subprocess.run`.
   - Replace *all* calls to `subprocess.run` with `self._runner`.
