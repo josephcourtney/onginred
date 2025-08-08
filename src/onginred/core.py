@@ -487,6 +487,11 @@ class LaunchdService:
             raise TypeError(msg)
         self.bundle_identifier = bundle_identifier
         self.program = program
+
+        if not command and not program:
+            msg = "Missing required program or program arguments"
+            raise TypeError(msg)
+
         self.command = list(command) if command else []
         self.schedule = schedule
         self.create_dir = create_dir
