@@ -19,7 +19,7 @@
   dependencies = [
     "croniter>=6.0.0",
     "jkit>=0.0.12",
-]
+  ]
 
   # [project.scripts]
   #   onginred = "onginred.cli:main" # may be added later
@@ -34,7 +34,7 @@
     "pytest-randomly>=3.16.0",
     "freezegun>=1.5.1",
     "pyfakefs>=5.9.2",
-]
+  ]
 
 # =================================== build ====================================
 [build-system]
@@ -42,7 +42,7 @@
   build-backend = "uv_build"
 
 [tool.uv.sources]
-  jkit = { git = "ssh://git@github.com-josephcourtney/josephcourtney/jkit.git" }
+  jkit = { git = "ssh://git@github.com/josephcourtney/jkit.git" }
 
 # ==================================== lint ====================================
 [tool.ruff]
