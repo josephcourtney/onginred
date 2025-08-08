@@ -4,9 +4,15 @@ import logging
 import os
 import platform
 import stat
+import tempfile
+from contextlib import contextmanager
 from enum import Enum
 from os import PathLike
 from pathlib import Path
+from typing import IO, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 
 class TargetType(Enum):
@@ -193,3 +199,17 @@ def ensure_path(
         _set_posix_permissions(path, permissions)
     logger.info("validated path", extra={"path": str(path)})
     return path
+
+
+@contextmanager
+def atomic_write(path: Path, mode: str = "wb") -> Iterator[IO[bytes]]:
+    """Write to ``path`` atomically, cleaning up on failure."""
+    fd, tmp = tempfile.mkstemp(dir=path.parent)
+    tmp_path = Path(tmp)
+    try:
+        with os.fdopen(fd, mode) as f:
+            yield f
+        tmp_path.replace(path)
+    except Exception:  # pragma: no cover - cleanup path
+        tmp_path.unlink(missing_ok=True)
+        raise

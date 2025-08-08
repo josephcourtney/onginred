@@ -1,3 +1,5 @@
+from typing import cast
+
 import pytest
 from pydantic import ValidationError
 
@@ -45,7 +47,7 @@ def test_launch_behavior_default_plist():
 # Resource Limits and Process Attributes
 def test_soft_and_hard_resource_limits():
     lb = LaunchBehavior()
-    plist = lb.to_plist_dict()
+    plist = cast("dict", lb.to_plist_dict())
     plist["SoftResourceLimits"] = {"CPU": 60, "NumberOfFiles": 256}
     plist["HardResourceLimits"] = {"CPU": 120, "NumberOfFiles": 512}
     assert plist["SoftResourceLimits"]["CPU"] == 60
@@ -54,7 +56,7 @@ def test_soft_and_hard_resource_limits():
 
 def test_process_type_and_nice():
     lb = LaunchBehavior()
-    plist = lb.to_plist_dict()
+    plist = cast("dict", lb.to_plist_dict())
     plist["ProcessType"] = "Interactive"
     plist["Nice"] = 10
     assert plist["ProcessType"] == "Interactive"
