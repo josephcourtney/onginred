@@ -1,4 +1,44 @@
+# Environment & virtualenvs
+.env
 .envrc
 .venv/
-.hypothesis/
+venv/
+ENV/
+env/
+*.env
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Build & packaging
+build/
 dist/
+eggs/
+.eggs/
+parts/
+sdist/
+wheels/
+*.egg-info/
+.installed.cfg
+
+# Test & coverage
+.hypothesis/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# IDE / editor
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# MkDocs site build
+site/
+
+# OS files
+.DS_Store
+Thumbs.db
