@@ -1,31 +1,107 @@
 # onginred
 
-**Onginred** is a Python project that programmatically defines, configures, and manages macOS `launchd` services. Its core purpose is to provide a structured, Pythonic interface for building and installing `launchd` property lists (`.plist` files), which are used by macOS to manage background agents and daemons.
+**onginred** is a Python library and CLI tool for defining, configuring, and managing macOS `launchd` services programmatically.
 
-## Meaning 
-  **onginred** /ˈɒn.kɪn.rɛd/
-  1. the act of guiding the beginning of a task, journey, or enterprise
-  From Anglish, from Old English *onginrǣd*, a compound of *ongin* ("beginning, undertaking") and *rǣd* ("counsel, advice, plan").
+It lets you:
 
-## Core capabilities:
+- Build `.plist` files with validated, composable schedules.
+- Install/uninstall launchd jobs directly — no manual `plutil` or `launchctl` needed.
+- Trigger jobs by time, file changes, events, or combinations thereof.
+- Use either a **Python API** or a **CLI** workflow.
 
-* **Define launch configurations** using [Pydantic](https://docs.pydantic.dev/) models and Python data structures instead of writing raw XML property lists.
-* **Support for time-based scheduling**, file system triggers, sockets, Mach services, and more via composable classes:
+---
 
-  * `TimeTriggers`, `FilesystemTriggers`, `EventTriggers`, and `LaunchBehavior`.
-* **Export to valid `launchd.plist` format** using `plistlib`.
-* **Installation and removal** of launch agents using `launchctl`.
-* **Support for advanced features** like suppression windows, cron expressions, socket configurations, and restart conditions.
+## Meaning
 
-## Quick start
+**onginred** /ˈɒn.kɪn.rɛd/  
+> the act of guiding the beginning of a task, journey, or enterprise  
+> From Anglish, from Old English *onginrǣd*, a compound of *ongin* ("beginning, undertaking") and *rǣd* ("counsel, advice, plan").
+
+---
+
+## Installation
+
+```bash
+pip install onginred
+````
+
+Requires **Python 3.13+**.
+Install on macOS for full functionality. Validation runs cross-platform.
+
+---
+
+## Quick examples
+Here’s a **short, polished `README.md`** designed for GitHub — concise enough for a landing page, but still informative and pointing people toward the full docs you now have in `docs/`.
+
+---
+
+````markdown
+
+**CLI — timed job**
+
+```bash
+onginred install com.example.hello \
+  --run-at-load \
+  --start-interval 300 \
+  --log-dir "$HOME/Library/Logs" \
+  --create-log-files \
+  -- "$HOME/bin/hello.sh"
+```
+
+**Python API — file watcher**
 
 ```python
+from pathlib import Path
 from onginred.schedule import LaunchdSchedule
 from onginred.service import LaunchdService
 
 sched = LaunchdSchedule()
-sched.add_cron("0 12 * * *")
+sched.behavior.run_at_load = True
+sched.fs.add_watch_path("/path/to/watch")
 
-svc = LaunchdService("com.example.hello", ["echo", "hello"], sched)
+svc = LaunchdService(
+    bundle_identifier="com.example.onchange",
+    command=["/path/to/onchange.sh"],
+    schedule=sched,
+    log_dir=Path.home() / "Library" / "Logs",
+    create_dir=True,
+)
 svc.install()
 ```
+
+---
+
+## Documentation
+
+Full documentation, including all CLI flags, Python API reference, and advanced scheduling features, is available at: 
+https://josephcourtney.github.io/onginred/ (coming soon...)
+
+📖 **[Docs](docs/index.md)** — start with:
+
+* [CLI Usage](docs/cli.md)
+* [Python API](docs/api.md)
+* [Scheduling & Triggers](docs/scheduling.md)
+
+---
+
+## Development
+
+```bash
+git clone https://github.com/yourname/onginred.git
+cd onginred
+python -m venv venv
+source venv/bin/activate
+pip install -e .[dev]
+```
+
+* Linting: `ruff check`
+* Formatting: `ruff format`
+* Testing: `pytest`
+* Type checking: `ty check`
+
+---
+
+## License
+
+GPL-3.0-only
+
