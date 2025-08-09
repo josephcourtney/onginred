@@ -1,0 +1,36 @@
+site_name: onginred
+site_description: "Python + CLI for macOS launchd services"
+site_url: https://josephcourtney.github.io/onginred/
+repo_url: https://github.com/josephcourtney/onginred
+repo_name: josephcourtney/onginred
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.expand
+    - navigation.sections
+    - toc.integrate
+    - content.code.copy
+  icon:
+    repo: fontawesome/brands/github
+
+nav:
+  - Home: index.md
+  - CLI Usage: cli.md
+  - Python API: api.md
+  - Scheduling & Triggers: scheduling.md
+  - Development: development.md
+
+markdown_extensions:
+  - admonition
+  - codehilite
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight
+  - pymdownx.snippets
+  - pymdownx.tabbed:
+      alternate_style: true

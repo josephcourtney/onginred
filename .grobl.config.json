@@ -1,5 +1,8 @@
 {
   "exclude_tree": [
+    "dist/",
+    "man_launchd_plist.md",
+    ".hypothesis",
     "__pycache__/",
     ".coverage",
     ".grobl.config.json",
