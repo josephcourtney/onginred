@@ -25,17 +25,11 @@ It lets you:
 pip install onginred
 ````
 
-Requires **Python 3.13+**.
-Install on macOS for full functionality. Validation runs cross-platform.
+Requires **Python 3.13+**. Install on macOS for full functionality (validation runs cross-platform).
 
 ---
 
 ## Quick examples
-Here’s a **short, polished `README.md`** designed for GitHub — concise enough for a landing page, but still informative and pointing people toward the full docs you now have in `docs/`.
-
----
-
-````markdown
 
 **CLI — timed job**
 
@@ -73,10 +67,12 @@ svc.install()
 
 ## Documentation
 
-Full documentation, including all CLI flags, Python API reference, and advanced scheduling features, is available at: 
-https://josephcourtney.github.io/onginred/ (coming soon...)
+Full docs (CLI flags, API reference, scheduling) are in:
 
-📖 **[Docs](docs/index.md)** — start with:
+* 📖 **Website:** [https://josephcourtney.github.io/onginred/](https://josephcourtney.github.io/onginred/) (enable via GitHub Pages)
+* 📚 **Markdown:** [docs/index.md](docs/index.md)
+
+Start with:
 
 * [CLI Usage](docs/cli.md)
 * [Python API](docs/api.md)
@@ -87,7 +83,7 @@ https://josephcourtney.github.io/onginred/ (coming soon...)
 ## Development
 
 ```bash
-git clone https://github.com/yourname/onginred.git
+git clone https://github.com/josephcourtney/onginred.git
 cd onginred
 python -m venv venv
 source venv/bin/activate
