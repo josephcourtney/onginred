@@ -13,8 +13,8 @@ It lets you:
 
 ## Meaning
 
-**onginred** /ˈɒn.kɪn.rɛd/  
-> the act of guiding the beginning of a task, journey, or enterprise  
+**onginred** /ˈɒn.kɪn.rɛd/
+> the act of guiding the beginning of a task, journey, or enterprise
 > From Anglish, from Old English *onginrǣd*, a compound of *ongin* ("beginning, undertaking") and *rǣd* ("counsel, advice, plan").
 
 ---
@@ -25,7 +25,7 @@ It lets you:
 pip install onginred
 ````
 
-Requires **Python 3.13+**. Install on macOS for full functionality (validation runs cross-platform).
+Requires **Python 3.12+**. Install on macOS for full functionality (validation runs cross-platform).
 
 ---
 
@@ -69,14 +69,14 @@ svc.install()
 
 Full docs (CLI flags, API reference, scheduling) are in:
 
-* 📖 **Website:** [https://josephcourtney.github.io/onginred/](https://josephcourtney.github.io/onginred/) (enable via GitHub Pages)
-* 📚 **Markdown:** [docs/index.md](docs/index.md)
+- 📖 **Website:** [https://josephcourtney.github.io/onginred/](https://josephcourtney.github.io/onginred/) (enable via GitHub Pages)
+- 📚 **Markdown:** [docs/index.md](docs/index.md)
 
 Start with:
 
-* [CLI Usage](docs/cli.md)
-* [Python API](docs/api.md)
-* [Scheduling & Triggers](docs/scheduling.md)
+- [CLI Usage](docs/cli.md)
+- [Python API](docs/api.md)
+- [Scheduling & Triggers](docs/scheduling.md)
 
 ---
 
@@ -90,14 +90,13 @@ source venv/bin/activate
 pip install -e .[dev]
 ```
 
-* Linting: `ruff check`
-* Formatting: `ruff format`
-* Testing: `pytest`
-* Type checking: `ty check`
+- Linting: `ruff check`
+- Formatting: `ruff format`
+- Testing: `pytest`
+- Type checking: `ty check`
 
 ---
 
 ## License
 
 GPL-3.0-only
-

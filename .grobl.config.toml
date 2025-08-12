@@ -1,0 +1,94 @@
+# files whose content is not helpful context 
+exclude_tree = [
+  # project-specific
+  "man_launchd_plist.md",
+  ".pre-commit-config.yaml",
+  "AGENTS.md",
+
+  ".git",
+  ".hg",
+  ".svn",
+  ".DS_Store",
+  "Thumbs.db",
+
+  # Editor/IDE settings and state
+  ".idea",
+  ".vscode",
+  "*.sublime-workspace",
+  "*.sublime-project",
+
+  # Environment/dependency caches
+  "__pycache__",
+  ".venv",
+  "venv",
+  "env",
+  ".env",
+  "node_modules",
+  "bower_components",
+  "target",           # Rust, Maven, etc.
+  "dist",
+  "build",
+  ".pytest_cache",
+  ".hypothesis",
+  ".mypy_cache",
+  ".tox",
+  ".coverage",
+  ".coverage.xml",
+  "coverage.xml",
+
+  # OS or tool artifacts
+  "*.egg-info",
+  "*.log",
+  "*.tmp",
+  "*.bak",
+  "*.lock",
+
+  # Apple/Xcode (minimal, only most universal)
+  "*.xcuserdatad",
+  "*.xcworkspace",
+]
+
+# Files/folders where presence is useful but contents usually aren't.
+exclude_print = [
+  "LICENSE",
+  "LICENSE.*",
+  "COPYING",
+  "CODE_OF_CONDUCT.md",
+  "CONTRIBUTING.md",
+
+  # Documentation
+  "README.*",
+  "docs",
+  "docs/*",
+
+  # Build artifacts (if not already hidden by tree)
+  "dist",
+  "dist/*",
+  "build",
+  "build/*",
+
+  # Localization/assets
+  "*.lproj/*",
+  "*.xcassets/*",
+  "*.png",
+  "*.jpg",
+  "*.jpeg",
+  "*.gif",
+  "*.svg",
+
+  # Lock/config files (content rarely needed)
+  "package-lock.json",
+  "yarn.lock",
+  "pnpm-lock.yaml",
+  "poetry.lock",
+  "Pipfile.lock",
+  "Cargo.lock",
+  "composer.lock",
+  "Gemfile.lock",
+  "uv.lock",
+  "ruff.default.toml",
+]
+
+# Tag settings
+include_tree_tags = "tree"
+include_file_tags = "file"

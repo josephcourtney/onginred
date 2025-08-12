@@ -10,7 +10,6 @@ You are contributing to `onginred`.
 
 ## Role
 
-
 Your responsibilities include:
 
 * Editing Python source files under `src/onginred/`
@@ -47,7 +46,7 @@ If any command fails due to missing executables or environment configuration, em
 ### Static Typing
 
 * Command: `.venv/bin/ty check src/ tests/`
-* Syntax: Use Python 3.13–compatible type annotations
+* Syntax: Use Python 3.12–compatible type annotations
 * Constraints: Must follow `pyproject.toml` settings
 
 > If `ty` is not available in `.venv/bin/`, log a failure notice, emit proposed code as a Markdown patch, and halt execution.
@@ -82,7 +81,6 @@ If any command fails due to missing executables or environment configuration, em
 * If `TODO.md` is missing, create a new file and notify the user
 
 ### Changelog Maintenance
-
 
 Follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format:
 
@@ -160,4 +158,3 @@ All actions must follow this protocol unless:
 
 ```
 ```
-
