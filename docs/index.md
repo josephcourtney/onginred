@@ -11,8 +11,9 @@ It provides:
 
 ## Meaning
 
-**onginred** /ˈɒn.kɪn.rɛd/  
-1. the act of guiding the beginning of a task, journey, or enterprise  
+**onginred** /ˈɒn.kɪn.rɛd/
+
+1. the act of guiding the beginning of a task, journey, or enterprise
    From Anglish, from Old English *onginrǣd*, a compound of *ongin* ("beginning, undertaking") and *rǣd* ("counsel, advice, plan").
 
 ---
@@ -33,14 +34,13 @@ It provides:
 pip install onginred
 ````
 
-Requires **Python 3.13+**.
+Requires **Python 3.12+**.
 
 ---
 
 ## Next steps
 
-* [CLI Usage](cli.md) — learn the command-line interface
-* [Python API](api.md) — use the library programmatically
-* [Scheduling & Triggers](scheduling.md) — available trigger types
-* [Development](development.md) — contributing, testing, and linting
-
+- [CLI Usage](cli.md) — learn the command-line interface
+- [Python API](api.md) — use the library programmatically
+- [Scheduling & Triggers](scheduling.md) — available trigger types
+- [Development](development.md) — contributing, testing, and linting

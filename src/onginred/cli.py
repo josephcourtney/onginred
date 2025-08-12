@@ -23,8 +23,7 @@ def _cmd_inspect(args: argparse.Namespace) -> None:
     print(json.dumps(plist, indent=2))
 
 
-def _apply_schedule_args(sched: LaunchdSchedule, args: argparse.Namespace) -> None:
-    # Behavior
+def _apply_behavior_args(sched: LaunchdSchedule, args: argparse.Namespace) -> None:
     if args.run_at_load:
         sched.behavior.run_at_load = True
     if args.keep_alive:
@@ -34,7 +33,8 @@ def _apply_schedule_args(sched: LaunchdSchedule, args: argparse.Namespace) -> No
     if args.throttle_interval is not None:
         sched.behavior.throttle_interval = args.throttle_interval
 
-    # Time
+
+def _apply_time_args(sched: LaunchdSchedule, args: argparse.Namespace) -> None:
     if args.start_interval is not None:
         sched.time.set_start_interval(args.start_interval)
     for expr in args.cron or ():
@@ -45,13 +45,20 @@ def _apply_schedule_args(sched: LaunchdSchedule, args: argparse.Namespace) -> No
     for rng in args.suppress or ():
         sched.time.add_suppression_window(rng)
 
-    # Filesystem
+
+def _apply_fs_args(sched: LaunchdSchedule, args: argparse.Namespace) -> None:
     for p in args.watch or ():
         sched.fs.add_watch_path(p)
     for p in args.queue or ():
         sched.fs.add_queue_directory(p)
     if args.start_on_mount:
         sched.fs.enable_start_on_mount()
+
+
+def _apply_schedule_args(sched: LaunchdSchedule, args: argparse.Namespace) -> None:
+    _apply_behavior_args(sched, args)
+    _apply_time_args(sched, args)
+    _apply_fs_args(sched, args)
 
 
 def _cmd_install(args: argparse.Namespace) -> None:
@@ -65,7 +72,7 @@ def _cmd_install(args: argparse.Namespace) -> None:
 
     svc = LaunchdService(
         bundle_identifier=args.label,
-        command=args.command if args.command else None,
+        command=args.command or None,
         program=args.program,
         schedule=sched,
         plist_path=Path(args.plist_path).expanduser() if args.plist_path else None,
@@ -132,7 +139,8 @@ def main(argv: list[str] | None = None) -> None:
     # install
     p_install = sub.add_parser("install", help="write plist and load via launchctl")
     p_install.add_argument("label", help="service label")
-    # Either program OR command (ProgramArguments). If both provided, Program remains but ProgramArguments are also kept.
+    # Either program OR command (ProgramArguments).
+    # If both provided, Program remains but ProgramArguments are also kept.
     p_install.add_argument("--program", help="Program path to execute instead of ProgramArguments[0]")
     p_install.add_argument("command", nargs=argparse.REMAINDER, help="ProgramArguments: command and its args")
     p_install.add_argument(
